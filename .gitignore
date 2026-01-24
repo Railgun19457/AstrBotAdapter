@@ -43,3 +43,5 @@ Thumbs.db
 # Plugin test servers
 test-server/
 run/
+
+devplan/
