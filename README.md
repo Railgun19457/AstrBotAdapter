@@ -18,9 +18,21 @@
 
 ## 兼容性
 
-- **服务器核心**: Paper, Spigot, Leaf 等主流插件服核心
-- **Minecraft 版本**: 1.20.x, 1.21.x
+### 支持的平台
+
+| 平台 | 版本 | 下载 |
+|------|------|------|
+| **Bukkit/Paper/Spigot** | 1.20.x - 1.21.x | `AstrbotAdaptor-x.x.x-Bukkit.jar` |
+| **Folia** | 1.20.x | `AstrbotAdaptor-x.x.x-Folia.jar` |
+| **Velocity** | 3.3.x | `AstrbotAdaptor-x.x.x-Velocity.jar` |
+
 - **Java 版本**: 17+
+
+### 平台说明
+
+- **Bukkit/Paper/Spigot**: 适用于大多数传统 Minecraft 服务器
+- **Folia**: 适用于 Paper 的区域化多线程分支，提供更好的多核性能
+- **Velocity**: 适用于 Velocity 代理服务器，支持跨服消息转发
 
 ## 快速开始
 
@@ -99,10 +111,20 @@ message:
 需要 Java 17+ 和 Maven 3.6+：
 
 ```bash
-mvn clean compile package
+# 编译 Bukkit/Paper/Spigot 版本 (默认)
+mvn clean package -P bukkit
+
+# 编译 Folia 版本
+mvn clean package -P folia
+
+# 编译 Velocity 版本
+mvn clean package -P velocity
 ```
 
-编译后的 jar 文件位于 `target/AstrbotAdapter-*.*.*.jar`
+编译后的 jar 文件位于 `target/` 目录：
+- `AstrbotAdaptor-2.0.0-Bukkit.jar`
+- `AstrbotAdaptor-2.0.0-Folia.jar`
+- `AstrbotAdaptor-2.0.0-Velocity.jar`
 
 ## 开源协议
 
@@ -112,6 +134,12 @@ MIT License - 详见 [LICENSE](LICENSE)
 
 欢迎提交 Issue 和 Pull Request！
 ## 更新日志
+- v2.0.0
+  - 重构架构，支持多平台（Bukkit/Folia/Velocity）
+  - 新增 Folia 区域化多线程支持
+  - 新增 Velocity 代理服务器支持
+  - 统一抽象层设计，更好的可扩展性
+  - 改进的国际化支持
 - v1.0.3
   - 支持AI聊天
   - 添加配置自动校验

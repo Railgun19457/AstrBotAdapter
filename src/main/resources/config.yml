@@ -1,0 +1,122 @@
+# AstrbotAdapter 配置文件
+# 版本: 1.0.0
+
+# 语言设置 (zh_CN, en_US)
+language: zh_CN
+
+# WebSocket 配置
+websocket:
+  # 是否启用 WebSocket 服务器
+  enabled: true
+  # 监听地址 (0.0.0.0 = 所有接口)
+  host: "0.0.0.0"
+  # 监听端口
+  port: 8765
+  # 心跳间隔 (秒)
+  heartbeat-interval: 30
+  # 心跳超时 (秒)
+  heartbeat-timeout: 90
+  # 最大连接数 (0 = 无限制)
+  max-connections: 10
+
+# REST API 配置
+rest:
+  # 是否启用 REST API
+  enabled: true
+  # 监听地址
+  host: "0.0.0.0"
+  # 监听端口
+  port: 8080
+  # 速率限制 (每分钟请求数)
+  rate-limit: 60
+  # 是否启用 CORS
+  cors-enabled: true
+  # CORS 允许的来源 (* = 所有)
+  cors-origins:
+    - "*"
+
+# 认证配置
+auth:
+  # 认证令牌 (首次启动会自动生成)
+  # 设为空字符串则禁用认证 (不推荐)
+  token: ""
+  # 是否在首次启动时自动生成令牌
+  auto-generate: true
+
+# AI 聊天配置
+chat:
+  # 是否启用 AI 聊天
+  enabled: true
+  # 群聊前缀 (触发 AI 对话)
+  group-prefix: "#"
+  # 私聊前缀 (仅玩家可见回复)
+  private-prefix: "@"
+  # 是否需要权限才能使用 AI 聊天
+  require-permission: false
+  # AI 回复格式
+  # 可用占位符: {player}, {message}
+  response-format: "&7[&bAI&7] &f{message}"
+  # 等待回复的提示消息
+  waiting-message: "&7正在思考中..."
+  # AI 请求超时 (秒)
+  timeout: 30
+
+# 消息转发配置
+forward:
+  # 是否启用消息转发
+  enabled: true
+  # 转发过滤模式 (whitelist/blacklist/none)
+  filter-mode: none
+  # 白名单关键词 (filter-mode 为 whitelist 时生效)
+  whitelist: []
+  # 黑名单关键词 (filter-mode 为 blacklist 时生效)
+  blacklist:
+    - "密码"
+    - "password"
+  # 转发消息格式
+  # 可用占位符: {player}, {displayname}, {message}, {world}
+  format: "[{player}] {message}"
+  # 外部消息格式 (从外部发送到游戏内的消息)
+  # 可用占位符: {source}, {sender}, {message}
+  external-format: "&7[&a外部&7] &b{sender}&7: &f{message}"
+
+# 玩家事件通知配置
+notify:
+  # 是否启用通知
+  enabled: true
+  # 玩家加入通知
+  player-join: true
+  # 玩家退出通知
+  player-quit: true
+  # 通知延迟 (ticks, 20 ticks = 1 秒)
+  delay: 20
+
+# 命令执行配置
+command:
+  # 命令白名单 (为空则允许所有)
+  whitelist: []
+  # 命令黑名单
+  blacklist:
+    - "op"
+    - "deop"
+    - "stop"
+    - "restart"
+    - "ban"
+    - "ban-ip"
+    - "pardon"
+    - "pardon-ip"
+    - "whitelist"
+    - "astrbot"
+
+# 日志配置
+log:
+  # 是否启用日志 API
+  enabled: true
+  # 最大返回行数
+  max-lines: 1000
+  # 允许的日志文件
+  allowed-files:
+    - "latest.log"
+
+# 调试选项
+debug: false

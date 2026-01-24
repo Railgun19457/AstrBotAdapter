@@ -1,0 +1,76 @@
+# AstrbotAdapter 简体中文语言文件
+
+# 插件消息
+plugin:
+  enabled: "&a[AstrbotAdapter] 插件已启用"
+  disabled: "&c[AstrbotAdapter] 插件已禁用"
+  disabling: "&e[AstrbotAdapter] 正在关闭插件..."
+
+# 命令消息
+command:
+  no-permission: "&c你没有权限执行此命令"
+  unknown: "&c未知命令: {0}"
+  reload:
+    reloading: "&e正在重载配置..."
+    success: "&a配置重载成功"
+    failed: "&c配置重载失败: {0}"
+  status:
+    header: "&6=== AstrbotAdapter 状态 ==="
+    websocket: "&eWebSocket: {0}"
+    rest-api: "&eREST API: {0}"
+    running: "&a运行中"
+    stopped: "&c已停止"
+    disabled: "&7已禁用"
+  token:
+    current: "&6当前令牌: &f{0}"
+    regenerated: "&a新令牌已生成: &f{0}"
+    warning: "&7请妥善保管此令牌，不要泄露给他人"
+  connections:
+    header: "&6=== 活动连接 ({0}) ==="
+    none: "&e当前没有活动连接"
+    entry: "&e{0} &7- {1} &7- 最后活动: {2}秒前"
+    authenticated: "&a已认证"
+    unauthenticated: "&c未认证"
+
+# 聊天消息
+chat:
+  waiting: "&7正在思考中..."
+  response: "&7[&bAI&7] &f{0}"
+  error: "&c抱歉，处理您的请求时出现错误"
+  timeout: "&c请求超时，请稍后重试"
+  no-permission: "&c你没有权限使用 AI 聊天"
+
+# 消息转发
+forward:
+  from-external: "&7[&a外部&7] &b{0}&7: &f{1}"
+  to-external: "[{0}] {1}"
+  blocked: "&c此消息已被过滤"
+
+# 通知消息
+notify:
+  player-join: "玩家 {0} 加入了服务器"
+  player-quit: "玩家 {0} 离开了服务器"
+
+# 错误消息
+error:
+  config-load: "&c配置加载失败: {0}"
+  config-save: "&c配置保存失败: {0}"
+  websocket-start: "&cWebSocket 服务器启动失败: {0}"
+  rest-start: "&cREST API 服务器启动失败: {0}"
+  auth-failed: "认证失败"
+  invalid-token: "无效的令牌"
+  rate-limited: "请求过于频繁，请稍后重试"
+  server-error: "服务器内部错误"
+
+# API 响应消息
+api:
+  success: "操作成功"
+  unauthorized: "未授权访问"
+  forbidden: "禁止访问"
+  not-found: "资源未找到"
+  bad-request: "请求格式错误"
+  internal-error: "服务器内部错误"
+  command:
+    executed: "命令已执行"
+    blocked: "此命令不允许执行"
+    failed: "命令执行失败"

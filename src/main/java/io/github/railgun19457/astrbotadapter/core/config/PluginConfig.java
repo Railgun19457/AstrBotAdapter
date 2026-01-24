@@ -1,0 +1,275 @@
+package io.github.railgun19457.astrbotadapter.core.config;
+
+/**
+ * 插件配置数据类
+ * 对应 config.yml 中的所有配置项
+ */
+public class PluginConfig {
+
+    // 基础设置
+    private String language = "zh_CN";
+    private boolean debug = false;
+
+    // 认证设置
+    private String token = "";
+
+    // WebSocket 服务器配置
+    private boolean wsEnabled = true;
+    private String wsHost = "0.0.0.0";
+    private int wsPort = 8765;
+    private int heartbeatInterval = 30;
+    private int heartbeatTimeout = 90;
+
+    // REST API 服务器配置
+    private boolean restEnabled = true;
+    private String restHost = "0.0.0.0";
+    private int restPort = 8766;
+    private int rateLimit = 100;
+
+    // 消息转发配置
+    private boolean forwardEnabled = true;
+    private String forwardPrefix = "*";
+    private boolean stripPrefix = true;
+    private String incomingFormat = "§7[§b{platform}§7] §f{username}§7: §f{content}";
+
+    // AI 群聊配置
+    private boolean groupChatEnabled = true;
+    private String groupChatPrefix = "@";
+
+    // AI 私聊配置
+    private boolean privateChatEnabled = true;
+    private String privateChatPrefix = "#";
+
+    // AI 回复格式
+    private String aiResponseFormat = "§7[§dAI§7] §f{content}";
+
+    // 玩家通知配置
+    private boolean joinNotifyEnabled = true;
+    private boolean quitNotifyEnabled = true;
+
+    // 外部指令配置
+    private boolean commandEnabled = true;
+    private String commandFilterMode = "NONE"; // NONE, WHITELIST, BLACKLIST
+    private java.util.List<String> commandFilterList = new java.util.ArrayList<>();
+
+    // 更新检查
+    private boolean updateCheckEnabled = true;
+
+    // Getters and Setters
+
+    public String getLanguage() {
+        return language;
+    }
+
+    public void setLanguage(String language) {
+        this.language = language;
+    }
+
+    public boolean isDebug() {
+        return debug;
+    }
+
+    public void setDebug(boolean debug) {
+        this.debug = debug;
+    }
+
+    public String getToken() {
+        return token;
+    }
+
+    public void setToken(String token) {
+        this.token = token;
+    }
+
+    public boolean isWsEnabled() {
+        return wsEnabled;
+    }
+
+    public void setWsEnabled(boolean wsEnabled) {
+        this.wsEnabled = wsEnabled;
+    }
+
+    public String getWsHost() {
+        return wsHost;
+    }
+
+    public void setWsHost(String wsHost) {
+        this.wsHost = wsHost;
+    }
+
+    public int getWsPort() {
+        return wsPort;
+    }
+
+    public void setWsPort(int wsPort) {
+        this.wsPort = wsPort;
+    }
+
+    public int getHeartbeatInterval() {
+        return heartbeatInterval;
+    }
+
+    public void setHeartbeatInterval(int heartbeatInterval) {
+        this.heartbeatInterval = heartbeatInterval;
+    }
+
+    public int getHeartbeatTimeout() {
+        return heartbeatTimeout;
+    }
+
+    public void setHeartbeatTimeout(int heartbeatTimeout) {
+        this.heartbeatTimeout = heartbeatTimeout;
+    }
+
+    public boolean isRestEnabled() {
+        return restEnabled;
+    }
+
+    public void setRestEnabled(boolean restEnabled) {
+        this.restEnabled = restEnabled;
+    }
+
+    public String getRestHost() {
+        return restHost;
+    }
+
+    public void setRestHost(String restHost) {
+        this.restHost = restHost;
+    }
+
+    public int getRestPort() {
+        return restPort;
+    }
+
+    public void setRestPort(int restPort) {
+        this.restPort = restPort;
+    }
+
+    public int getRateLimit() {
+        return rateLimit;
+    }
+
+    public void setRateLimit(int rateLimit) {
+        this.rateLimit = rateLimit;
+    }
+
+    public boolean isForwardEnabled() {
+        return forwardEnabled;
+    }
+
+    public void setForwardEnabled(boolean forwardEnabled) {
+        this.forwardEnabled = forwardEnabled;
+    }
+
+    public String getForwardPrefix() {
+        return forwardPrefix;
+    }
+
+    public void setForwardPrefix(String forwardPrefix) {
+        this.forwardPrefix = forwardPrefix;
+    }
+
+    public boolean isStripPrefix() {
+        return stripPrefix;
+    }
+
+    public void setStripPrefix(boolean stripPrefix) {
+        this.stripPrefix = stripPrefix;
+    }
+
+    public String getIncomingFormat() {
+        return incomingFormat;
+    }
+
+    public void setIncomingFormat(String incomingFormat) {
+        this.incomingFormat = incomingFormat;
+    }
+
+    public boolean isGroupChatEnabled() {
+        return groupChatEnabled;
+    }
+
+    public void setGroupChatEnabled(boolean groupChatEnabled) {
+        this.groupChatEnabled = groupChatEnabled;
+    }
+
+    public String getGroupChatPrefix() {
+        return groupChatPrefix;
+    }
+
+    public void setGroupChatPrefix(String groupChatPrefix) {
+        this.groupChatPrefix = groupChatPrefix;
+    }
+
+    public boolean isPrivateChatEnabled() {
+        return privateChatEnabled;
+    }
+
+    public void setPrivateChatEnabled(boolean privateChatEnabled) {
+        this.privateChatEnabled = privateChatEnabled;
+    }
+
+    public String getPrivateChatPrefix() {
+        return privateChatPrefix;
+    }
+
+    public void setPrivateChatPrefix(String privateChatPrefix) {
+        this.privateChatPrefix = privateChatPrefix;
+    }
+
+    public String getAiResponseFormat() {
+        return aiResponseFormat;
+    }
+
+    public void setAiResponseFormat(String aiResponseFormat) {
+        this.aiResponseFormat = aiResponseFormat;
+    }
+
+    public boolean isJoinNotifyEnabled() {
+        return joinNotifyEnabled;
+    }
+
+    public void setJoinNotifyEnabled(boolean joinNotifyEnabled) {
+        this.joinNotifyEnabled = joinNotifyEnabled;
+    }
+
+    public boolean isQuitNotifyEnabled() {
+        return quitNotifyEnabled;
+    }
+
+    public void setQuitNotifyEnabled(boolean quitNotifyEnabled) {
+        this.quitNotifyEnabled = quitNotifyEnabled;
+    }
+
+    public boolean isCommandEnabled() {
+        return commandEnabled;
+    }
+
+    public void setCommandEnabled(boolean commandEnabled) {
+        this.commandEnabled = commandEnabled;
+    }
+
+    public String getCommandFilterMode() {
+        return commandFilterMode;
+    }
+
+    public void setCommandFilterMode(String commandFilterMode) {
+        this.commandFilterMode = commandFilterMode;
+    }
+
+    public java.util.List<String> getCommandFilterList() {
+        return commandFilterList;
+    }
+
+    public void setCommandFilterList(java.util.List<String> commandFilterList) {
+        this.commandFilterList = commandFilterList;
+    }
+
+    public boolean isUpdateCheckEnabled() {
+        return updateCheckEnabled;
+    }
+
+    public void setUpdateCheckEnabled(boolean updateCheckEnabled) {
+        this.updateCheckEnabled = updateCheckEnabled;
+    }
+}

@@ -1,8 +1,9 @@
 name: AstrbotAdapter
 version: '${project.version}'
-main: io.github.railgun19457.astrbotadapter.AstrbotAdapterBukkit
+main: io.github.railgun19457.astrbotadapter.AstrbotAdapterFolia
 api-version: '1.20'
-description: Astrbot 框架的 Minecraft 服务器适配器，支持 AI 聊天、消息转发和服务器管理
+folia-supported: true
+description: Astrbot 框架的 Minecraft 服务器适配器 (Folia版本)
 authors:
   - Railgun19457
 website: https://github.com/Railgun19457/AstrbotAdapter
