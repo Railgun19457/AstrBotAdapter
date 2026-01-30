@@ -2,6 +2,10 @@ package io.github.railgun19457.astrbotadapter.communication.rest;
 
 import io.github.railgun19457.astrbotadapter.communication.auth.AuthManager;
 import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
+import io.github.railgun19457.astrbotadapter.communication.rest.controller.CommandController;
+import io.github.railgun19457.astrbotadapter.communication.rest.controller.LogController;
+import io.github.railgun19457.astrbotadapter.communication.rest.controller.PlayerController;
+import io.github.railgun19457.astrbotadapter.communication.rest.controller.ServerController;
 import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
 import io.netty.bootstrap.ServerBootstrap;
 import io.netty.channel.*;
@@ -137,8 +141,15 @@ public class RestApiServer {
      * 注册默认API路由
      */
     private void registerDefaultRoutes() {
-        // 这些路由将在Controller中实现
-        // 此处仅作为占位符
+        ServerController serverController = new ServerController(platformAdapter);
+        PlayerController playerController = new PlayerController(platformAdapter);
+        CommandController commandController = new CommandController(platformAdapter, config, logger);
+        LogController logController = new LogController(platformAdapter, config);
+
+        serverController.registerRoutes(dispatcher);
+        playerController.registerRoutes(dispatcher);
+        commandController.registerRoutes(dispatcher);
+        logController.registerRoutes(dispatcher);
     }
 
     /**

@@ -2,19 +2,27 @@ package io.github.railgun19457.astrbotadapter;
 
 import io.github.railgun19457.astrbotadapter.communication.auth.AuthManager;
 import io.github.railgun19457.astrbotadapter.communication.rest.RestApiServer;
+import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
+import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
+import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
 import io.github.railgun19457.astrbotadapter.communication.websocket.WebSocketServer;
 import io.github.railgun19457.astrbotadapter.core.config.ConfigManager;
 import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
 import io.github.railgun19457.astrbotadapter.core.event.EventBus;
 import io.github.railgun19457.astrbotadapter.core.i18n.I18NManager;
 import io.github.railgun19457.astrbotadapter.core.i18n.MessageKey;
+import io.github.railgun19457.astrbotadapter.core.util.JsonUtil;
 import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
 import io.github.railgun19457.astrbotadapter.service.chat.ChatService;
 import io.github.railgun19457.astrbotadapter.service.forward.MessageForwardService;
 import io.github.railgun19457.astrbotadapter.service.notification.NotificationService;
+import com.google.gson.JsonNull;
+import com.google.gson.JsonObject;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
@@ -163,6 +171,11 @@ public abstract class AstrbotAdapterPlugin {
             logger.info("通知服务已初始化");
         }
 
+        // WebSocket入站消息处理
+        if (webSocketServer != null) {
+            webSocketServer.setMessageHandler(this::handleWebSocketMessage);
+        }
+
         logger.info("服务组件初始化完成");
     }
 
@@ -270,5 +283,153 @@ public abstract class AstrbotAdapterPlugin {
 
     public PlatformAdapter getPlatformAdapter() {
         return platformAdapter;
+    }
+
+    private void handleWebSocketMessage(Message message) {
+        if (message == null || message.getType() == null) {
+            return;
+        }
+
+        switch (message.getType()) {
+            case CHAT_RESPONSE -> {
+                if (chatService != null) {
+                    chatService.handleChatResponse(message);
+                }
+            }
+            case MESSAGE_INCOMING -> {
+                if (messageForwardService != null) {
+                    messageForwardService.handleIncomingMessage(message);
+                }
+            }
+            case COMMAND_REQUEST -> handleCommandRequest(message);
+            default -> {
+                // ignore other types
+            }
+        }
+    }
+
+    private void handleCommandRequest(Message message) {
+        if (webSocketServer == null) {
+            return;
+        }
+
+        PluginConfig config = configManager.getConfig();
+        if (!config.isCommandEnabled()) {
+            sendCommandError(message, ErrorCode.FEATURE_DISABLED, "外部指令执行功能已禁用");
+            return;
+        }
+
+        JsonObject payload = message.getPayload();
+        if (payload == null) {
+            sendCommandError(message, ErrorCode.REQUEST_PARAM_MISSING, "缺少请求体");
+            return;
+        }
+
+        String command = JsonUtil.getString(payload, "command", null);
+        if (command == null || command.isEmpty()) {
+            sendCommandError(message, ErrorCode.REQUEST_PARAM_MISSING, "缺少command参数");
+            return;
+        }
+
+        if (command.startsWith("/")) {
+            command = command.substring(1);
+        }
+
+        if (!isCommandAllowed(command)) {
+            sendCommandError(message, ErrorCode.COMMAND_FILTERED, "指令被过滤: " + command);
+            return;
+        }
+
+        boolean success = false;
+        String executor = JsonUtil.getString(payload, "executor", "CONSOLE");
+        String playerUuid = JsonUtil.getString(payload, "playerUuid", null);
+
+        try {
+            if ("PLAYER".equalsIgnoreCase(executor)) {
+                if (playerUuid == null) {
+                    sendCommandError(message, ErrorCode.REQUEST_PARAM_MISSING, "缺少playerUuid参数");
+                    return;
+                }
+                var playerOpt = platformAdapter.getPlayer(UUID.fromString(playerUuid));
+                if (playerOpt.isEmpty()) {
+                    sendCommandError(message, ErrorCode.PLAYER_NOT_ONLINE, "玩家不在线: " + playerUuid);
+                    return;
+                }
+                success = platformAdapter.executeCommand(playerOpt.get(), command);
+            } else {
+                success = platformAdapter.executeCommand(command);
+            }
+        } catch (Exception e) {
+            logger.warning("外部指令执行异常: " + e.getMessage());
+            success = false;
+        }
+
+        JsonObject responsePayload = new JsonObject();
+        responsePayload.addProperty("success", success);
+        responsePayload.addProperty("command", command);
+        responsePayload.addProperty("output", success ? "Command executed" : "Command execute failed");
+        if (success) {
+            responsePayload.add("errorCode", JsonNull.INSTANCE);
+            responsePayload.add("errorMessage", JsonNull.INSTANCE);
+        } else {
+            responsePayload.addProperty("errorCode", ErrorCode.COMMAND_EXECUTE_FAILED.getCode());
+            responsePayload.addProperty("errorMessage", "指令执行失败");
+        }
+
+        Message response = Message.builder()
+                .type(MessageType.COMMAND_RESPONSE)
+                .replyTo(message.getId())
+                .payload(responsePayload)
+                .build();
+
+        webSocketServer.broadcast(response);
+    }
+
+    private void sendCommandError(Message request, ErrorCode errorCode, String detail) {
+        if (webSocketServer == null) {
+            return;
+        }
+
+        JsonObject payload = new JsonObject();
+        payload.addProperty("code", errorCode.getCode());
+        payload.addProperty("message", errorCode.getMessage());
+        if (detail != null) {
+            payload.addProperty("detail", detail);
+        }
+
+        Message error = Message.builder()
+                .type(MessageType.ERROR)
+                .replyTo(request.getId())
+                .payload(payload)
+                .build();
+
+        webSocketServer.broadcast(error);
+    }
+
+    private boolean isCommandAllowed(String command) {
+        String filterMode = configManager.getConfig().getCommandFilterMode();
+        List<String> filterList = configManager.getConfig().getCommandFilterList();
+
+        if (filterMode == null || "NONE".equalsIgnoreCase(filterMode) || filterList == null || filterList.isEmpty()) {
+            return true;
+        }
+
+        if ("WHITELIST".equalsIgnoreCase(filterMode)) {
+            return filterList.stream().anyMatch(pattern -> matchCommandPattern(pattern, command));
+        }
+
+        if ("BLACKLIST".equalsIgnoreCase(filterMode)) {
+            return filterList.stream().noneMatch(pattern -> matchCommandPattern(pattern, command));
+        }
+
+        return true;
+    }
+
+    private boolean matchCommandPattern(String pattern, String command) {
+        if (pattern == null || pattern.isEmpty()) {
+            return false;
+        }
+        String regex = pattern.replace("*", ".*");
+        return command.matches("(?i)" + regex);
     }
 }

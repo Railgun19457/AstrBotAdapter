@@ -5,6 +5,7 @@ import com.google.gson.JsonObject;
 import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Response;
 import io.github.railgun19457.astrbotadapter.communication.rest.HttpRequestDispatcher;
+import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
 import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
@@ -18,16 +19,18 @@ import java.util.List;
 public class LogController {
 
     private final PlatformAdapter platformAdapter;
+    private final PluginConfig config;
 
-    public LogController(PlatformAdapter platformAdapter) {
+    public LogController(PlatformAdapter platformAdapter, PluginConfig config) {
         this.platformAdapter = platformAdapter;
+        this.config = config;
     }
 
     /**
      * 注册路由
      */
     public void registerRoutes(HttpRequestDispatcher dispatcher) {
-        dispatcher.registerRoute("/api/logs", this::getLogs);
+        dispatcher.registerRoute("/api/v1/logs", this::getLogs);
     }
 
     /**
@@ -38,6 +41,10 @@ public class LogController {
             return Response.error(ErrorCode.REQUEST_PARAM_ERROR, "仅支持GET请求");
         }
 
+        if (!config.isLogQueryEnabled()) {
+            return Response.error(ErrorCode.FEATURE_DISABLED, "日志查询功能已禁用");
+        }
+
         QueryStringDecoder decoder = new QueryStringDecoder(request.uri());
         
         // 获取参数
@@ -46,8 +53,9 @@ public class LogController {
         long endTime = getLongParam(decoder, "endTime", 0);
 
         // 限制最大行数
-        if (lines > 1000) {
-            lines = 1000;
+        int maxLines = config.getLogQueryMaxLines();
+        if (maxLines > 0 && lines > maxLines) {
+            lines = maxLines;
         }
 
         List<String> logs;

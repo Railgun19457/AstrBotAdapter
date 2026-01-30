@@ -42,6 +42,9 @@ public class PluginConfig {
 
     // AI 回复格式
     private String aiResponseFormat = "§7[§dAI§7] §f{content}";
+    private String aiThinkingMessage = "§7[§dAI§7] §e思考中...";
+    private boolean aiShowThinking = true;
+    private int aiTimeoutSeconds = 60;
 
     // 玩家通知配置
     private boolean joinNotifyEnabled = true;
@@ -52,8 +55,14 @@ public class PluginConfig {
     private String commandFilterMode = "NONE"; // NONE, WHITELIST, BLACKLIST
     private java.util.List<String> commandFilterList = new java.util.ArrayList<>();
 
+    // 日志查询
+    private boolean logQueryEnabled = true;
+    private int logQueryMaxLines = 1000;
+    private String logQueryFile = "";
+
     // 更新检查
     private boolean updateCheckEnabled = true;
+    private boolean updateNotifyOps = true;
 
     // Getters and Setters
 
@@ -225,6 +234,30 @@ public class PluginConfig {
         this.aiResponseFormat = aiResponseFormat;
     }
 
+    public String getAiThinkingMessage() {
+        return aiThinkingMessage;
+    }
+
+    public void setAiThinkingMessage(String aiThinkingMessage) {
+        this.aiThinkingMessage = aiThinkingMessage;
+    }
+
+    public boolean isAiShowThinking() {
+        return aiShowThinking;
+    }
+
+    public void setAiShowThinking(boolean aiShowThinking) {
+        this.aiShowThinking = aiShowThinking;
+    }
+
+    public int getAiTimeoutSeconds() {
+        return aiTimeoutSeconds;
+    }
+
+    public void setAiTimeoutSeconds(int aiTimeoutSeconds) {
+        this.aiTimeoutSeconds = aiTimeoutSeconds;
+    }
+
     public boolean isJoinNotifyEnabled() {
         return joinNotifyEnabled;
     }
@@ -265,11 +298,43 @@ public class PluginConfig {
         this.commandFilterList = commandFilterList;
     }
 
+    public boolean isLogQueryEnabled() {
+        return logQueryEnabled;
+    }
+
+    public void setLogQueryEnabled(boolean logQueryEnabled) {
+        this.logQueryEnabled = logQueryEnabled;
+    }
+
+    public int getLogQueryMaxLines() {
+        return logQueryMaxLines;
+    }
+
+    public void setLogQueryMaxLines(int logQueryMaxLines) {
+        this.logQueryMaxLines = logQueryMaxLines;
+    }
+
+    public String getLogQueryFile() {
+        return logQueryFile;
+    }
+
+    public void setLogQueryFile(String logQueryFile) {
+        this.logQueryFile = logQueryFile;
+    }
+
     public boolean isUpdateCheckEnabled() {
         return updateCheckEnabled;
     }
 
     public void setUpdateCheckEnabled(boolean updateCheckEnabled) {
         this.updateCheckEnabled = updateCheckEnabled;
+    }
+
+    public boolean isUpdateNotifyOps() {
+        return updateNotifyOps;
+    }
+
+    public void setUpdateNotifyOps(boolean updateNotifyOps) {
+        this.updateNotifyOps = updateNotifyOps;
     }
 }

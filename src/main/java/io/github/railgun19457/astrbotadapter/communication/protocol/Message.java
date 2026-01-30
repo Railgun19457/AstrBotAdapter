@@ -13,6 +13,7 @@ public class Message {
 
     private MessageType type;
     private String id;
+    private String replyTo;
     private MessageSource source;
     private MessageTarget target;
     private JsonObject payload;
@@ -53,6 +54,14 @@ public class Message {
 
     public void setId(String id) {
         this.id = id;
+    }
+
+    public String getReplyTo() {
+        return replyTo;
+    }
+
+    public void setReplyTo(String replyTo) {
+        this.replyTo = replyTo;
     }
 
     public MessageSource getSource() {
@@ -307,6 +316,11 @@ public class Message {
 
         public Builder id(String id) {
             message.setId(id);
+            return this;
+        }
+
+        public Builder replyTo(String replyTo) {
+            message.setReplyTo(replyTo);
             return this;
         }
 

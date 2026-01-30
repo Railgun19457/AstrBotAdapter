@@ -34,7 +34,7 @@ public class AstrbotAdapterFolia extends JavaPlugin {
                 this
         );
         getServer().getPluginManager().registerEvents(
-                new BukkitPlayerListener(pluginInstance.getNotificationService()),
+            new BukkitPlayerListener(this, pluginInstance.getNotificationService()),
                 this
         );
 

@@ -36,6 +36,9 @@ public class NotificationService {
         if (!config.isJoinNotifyEnabled()) {
             return;
         }
+                if (wsServer == null || !wsServer.isRunning()) {
+                        return;
+                }
 
         // 构建来源信息
         Message.PlayerInfo playerInfo = new Message.PlayerInfo(
@@ -71,6 +74,9 @@ public class NotificationService {
         if (!config.isQuitNotifyEnabled()) {
             return;
         }
+                if (wsServer == null || !wsServer.isRunning()) {
+                        return;
+                }
 
         // 构建来源信息
         Message.PlayerInfo playerInfo = new Message.PlayerInfo(
@@ -106,6 +112,9 @@ public class NotificationService {
      * 发送状态更新
      */
     public void sendStatusUpdate() {
+                if (wsServer == null || !wsServer.isRunning()) {
+                        return;
+                }
         // 构建payload
         JsonObject payload = new JsonObject();
         payload.addProperty("onlinePlayers", platformAdapter.getOnlinePlayerCount());

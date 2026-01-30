@@ -25,9 +25,9 @@ public class ServerController {
      * 注册路由
      */
     public void registerRoutes(HttpRequestDispatcher dispatcher) {
-        dispatcher.registerRoute("/api/server/info", this::getServerInfo);
-        dispatcher.registerRoute("/api/server/status", this::getServerStatus);
-        dispatcher.registerRoute("/api/server/tps", this::getServerTps);
+        dispatcher.registerRoute("/api/v1/server/info", this::getServerInfo);
+        dispatcher.registerRoute("/api/v1/server/status", this::getServerStatus);
+        dispatcher.registerRoute("/api/v1/server/tps", this::getServerTps);
     }
 
     /**

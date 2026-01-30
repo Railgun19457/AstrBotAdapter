@@ -33,7 +33,7 @@ public class CommandController {
      * 注册路由
      */
     public void registerRoutes(HttpRequestDispatcher dispatcher) {
-        dispatcher.registerRoute("/api/command/execute", this::executeCommand);
+        dispatcher.registerRoute("/api/v1/command/execute", this::executeCommand);
     }
 
     /**
@@ -105,16 +105,22 @@ public class CommandController {
             return true;
         }
 
-        String cmdName = command.split(" ")[0].toLowerCase();
-
         if ("WHITELIST".equals(filterMode)) {
             // 白名单模式：只允许列表中的指令
-            return filterList.stream().anyMatch(c -> c.equalsIgnoreCase(cmdName));
+            return filterList.stream().anyMatch(pattern -> matchCommandPattern(pattern, command));
         } else if ("BLACKLIST".equals(filterMode)) {
             // 黑名单模式：禁止列表中的指令
-            return filterList.stream().noneMatch(c -> c.equalsIgnoreCase(cmdName));
+            return filterList.stream().noneMatch(pattern -> matchCommandPattern(pattern, command));
         }
 
         return true;
+    }
+
+    private boolean matchCommandPattern(String pattern, String command) {
+        if (pattern == null || pattern.isEmpty()) {
+            return false;
+        }
+        String regex = pattern.replace("*", ".*");
+        return command.matches("(?i)" + regex);
     }
 }

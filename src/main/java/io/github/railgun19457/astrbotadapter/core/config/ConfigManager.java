@@ -8,6 +8,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.logging.Logger;
 
+import org.yaml.snakeyaml.DumperOptions;
+import org.yaml.snakeyaml.Yaml;
+
 /**
  * 配置管理器
  * 负责加载、保存、验证和热重载配置文件
@@ -123,7 +126,6 @@ public class ConfigManager {
     /**
      * 解析配置Map到PluginConfig对象
      */
-    @SuppressWarnings("unchecked")
     private void parseConfig(Map<String, Object> yaml) {
         // 基础设置
         Map<String, Object> general = getMap(yaml, "general");
@@ -188,153 +190,74 @@ public class ConfigManager {
                 config.setPrivateChatPrefix(getString(priv, "prefix", "#"));
             }
 
-            config.setAiResponseFormat(getString(aiChat, "responseFormat", "§7[§dAI§7] §f{content}"));
         }
 
         // 玩家通知
-        Map<String, Object> notify = getMap(yaml, "playerNotify");
+        Map<String, Object> notify = getMap(yaml, "playerNotification");
         if (notify != null) {
-            config.setJoinNotifyEnabled(getBoolean(notify, "joinEnabled", true));
-            config.setQuitNotifyEnabled(getBoolean(notify, "quitEnabled", true));
+            Map<String, Object> join = getMap(notify, "join");
+            if (join != null) {
+                config.setJoinNotifyEnabled(getBoolean(join, "enabled", true));
+            }
+            Map<String, Object> quit = getMap(notify, "quit");
+            if (quit != null) {
+                config.setQuitNotifyEnabled(getBoolean(quit, "enabled", true));
+            }
         }
 
         // 外部指令
-        Map<String, Object> cmd = getMap(yaml, "externalCommand");
+        Map<String, Object> cmd = getMap(yaml, "commandExecution");
         if (cmd != null) {
             config.setCommandEnabled(getBoolean(cmd, "enabled", true));
-            config.setCommandFilterMode(getString(cmd, "filterMode", "NONE"));
-            config.setCommandFilterList(getStringList(cmd, "filterList"));
+            config.setCommandFilterMode(getString(cmd, "filterType", "NONE"));
+            config.setCommandFilterList(getStringList(cmd, "commandList"));
+        }
+
+        // AI聊天扩展
+        if (aiChat != null) {
+            config.setAiResponseFormat(getString(aiChat, "responseFormat", "§7[§dAI§7] §f{content}"));
+            config.setAiThinkingMessage(getString(aiChat, "thinkingMessage", "§7[§dAI§7] §e思考中..."));
+            config.setAiShowThinking(getBoolean(aiChat, "showThinking", true));
+            config.setAiTimeoutSeconds(getInt(aiChat, "timeout", 60));
+        }
+
+        // 日志查询
+        Map<String, Object> logQuery = getMap(yaml, "logQuery");
+        if (logQuery != null) {
+            config.setLogQueryEnabled(getBoolean(logQuery, "enabled", true));
+            config.setLogQueryMaxLines(getInt(logQuery, "maxLines", 1000));
+            config.setLogQueryFile(getString(logQuery, "logFile", ""));
         }
 
         // 更新检查
-        Map<String, Object> update = getMap(yaml, "update");
+        Map<String, Object> update = getMap(yaml, "updateCheck");
         if (update != null) {
-            config.setUpdateCheckEnabled(getBoolean(update, "checkEnabled", true));
+            config.setUpdateCheckEnabled(getBoolean(update, "enabled", true));
+            config.setUpdateNotifyOps(getBoolean(update, "notifyOps", true));
         }
     }
 
-    // ===== 简易YAML解析器 =====
+    // ===== YAML 解析器 =====
     
+    @SuppressWarnings("unchecked")
     private Map<String, Object> loadYaml(Path file) throws IOException {
-        java.util.LinkedHashMap<String, Object> result = new java.util.LinkedHashMap<>();
-        java.util.Deque<java.util.Map.Entry<Integer, Map<String, Object>>> stack = new java.util.ArrayDeque<>();
-        stack.push(new java.util.AbstractMap.SimpleEntry<>(-1, result));
-
-        try (BufferedReader reader = Files.newBufferedReader(file, StandardCharsets.UTF_8)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                // 跳过空行和注释
-                String trimmed = line.trim();
-                if (trimmed.isEmpty() || trimmed.startsWith("#")) {
-                    continue;
-                }
-
-                // 计算缩进
-                int indent = 0;
-                for (char c : line.toCharArray()) {
-                    if (c == ' ') indent++;
-                    else break;
-                }
-
-                // 解析键值对
-                int colonIndex = trimmed.indexOf(':');
-                if (colonIndex > 0) {
-                    String key = trimmed.substring(0, colonIndex).trim();
-                    String value = colonIndex < trimmed.length() - 1 ? 
-                        trimmed.substring(colonIndex + 1).trim() : "";
-
-                    // 弹出比当前缩进深的层级
-                    while (stack.peek().getKey() >= indent) {
-                        stack.pop();
-                    }
-
-                    Map<String, Object> current = stack.peek().getValue();
-
-                    if (value.isEmpty()) {
-                        // 嵌套对象
-                        java.util.LinkedHashMap<String, Object> nested = new java.util.LinkedHashMap<>();
-                        current.put(key, nested);
-                        stack.push(new java.util.AbstractMap.SimpleEntry<>(indent, nested));
-                    } else {
-                        // 简单值
-                        current.put(key, parseValue(value));
-                    }
-                } else if (trimmed.startsWith("- ")) {
-                    // 列表项
-                    while (stack.peek().getKey() >= indent) {
-                        stack.pop();
-                    }
-                    // 找到上一个键对应的列表
-                    // 简化处理：暂不支持复杂列表
-                }
+        Yaml yaml = new Yaml();
+        try (InputStream in = Files.newInputStream(file)) {
+            Object loaded = yaml.load(in);
+            if (loaded instanceof Map) {
+                return (Map<String, Object>) loaded;
             }
         }
-
-        return result;
-    }
-
-    private Object parseValue(String value) {
-        // 移除引号
-        if ((value.startsWith("\"") && value.endsWith("\"")) ||
-            (value.startsWith("'") && value.endsWith("'"))) {
-            return value.substring(1, value.length() - 1);
-        }
-        
-        // 布尔值
-        if (value.equalsIgnoreCase("true")) return true;
-        if (value.equalsIgnoreCase("false")) return false;
-        
-        // 数字
-        try {
-            if (value.contains(".")) {
-                return Double.parseDouble(value);
-            } else {
-                return Integer.parseInt(value);
-            }
-        } catch (NumberFormatException ignored) {}
-        
-        return value;
+        return new java.util.LinkedHashMap<>();
     }
 
     private void writeYaml(BufferedWriter writer, Map<String, Object> data) throws IOException {
-        writeYaml(writer, data, 0);
-    }
-
-    @SuppressWarnings("unchecked")
-    private void writeYaml(BufferedWriter writer, Map<String, Object> data, int indent) throws IOException {
-        String prefix = "  ".repeat(indent);
-        
-        for (Map.Entry<String, Object> entry : data.entrySet()) {
-            Object value = entry.getValue();
-            
-            if (value instanceof Map) {
-                writer.write(prefix + entry.getKey() + ":");
-                writer.newLine();
-                writeYaml(writer, (Map<String, Object>) value, indent + 1);
-            } else if (value instanceof List) {
-                writer.write(prefix + entry.getKey() + ":");
-                writer.newLine();
-                for (Object item : (List<?>) value) {
-                    writer.write(prefix + "  - " + formatValue(item));
-                    writer.newLine();
-                }
-            } else {
-                writer.write(prefix + entry.getKey() + ": " + formatValue(value));
-                writer.newLine();
-            }
-        }
-    }
-
-    private String formatValue(Object value) {
-        if (value instanceof String) {
-            String str = (String) value;
-            if (str.contains(":") || str.contains("#") || str.contains("\"") ||
-                str.startsWith(" ") || str.endsWith(" ")) {
-                return "\"" + str.replace("\"", "\\\"") + "\"";
-            }
-            return str;
-        }
-        return String.valueOf(value);
+        DumperOptions options = new DumperOptions();
+        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
+        options.setPrettyFlow(true);
+        options.setIndent(2);
+        Yaml yaml = new Yaml(options);
+        yaml.dump(data, writer);
     }
 
     private Map<String, Object> buildConfigMap() {
@@ -368,6 +291,62 @@ public class ConfigManager {
         rest.put("rateLimit", config.getRateLimit());
         server.put("restapi", rest);
         root.put("server", server);
+
+        // messageForward
+        java.util.LinkedHashMap<String, Object> forward = new java.util.LinkedHashMap<>();
+        forward.put("enabled", config.isForwardEnabled());
+        forward.put("prefix", config.getForwardPrefix());
+        forward.put("stripPrefix", config.isStripPrefix());
+        forward.put("incomingFormat", config.getIncomingFormat());
+        root.put("messageForward", forward);
+
+        // aiChat
+        java.util.LinkedHashMap<String, Object> aiChat = new java.util.LinkedHashMap<>();
+        java.util.LinkedHashMap<String, Object> group = new java.util.LinkedHashMap<>();
+        group.put("enabled", config.isGroupChatEnabled());
+        group.put("prefix", config.getGroupChatPrefix());
+        aiChat.put("group", group);
+
+        java.util.LinkedHashMap<String, Object> priv = new java.util.LinkedHashMap<>();
+        priv.put("enabled", config.isPrivateChatEnabled());
+        priv.put("prefix", config.getPrivateChatPrefix());
+        aiChat.put("private", priv);
+
+        aiChat.put("responseFormat", config.getAiResponseFormat());
+        aiChat.put("thinkingMessage", config.getAiThinkingMessage());
+        aiChat.put("showThinking", config.isAiShowThinking());
+        aiChat.put("timeout", config.getAiTimeoutSeconds());
+        root.put("aiChat", aiChat);
+
+        // playerNotification
+        java.util.LinkedHashMap<String, Object> notify = new java.util.LinkedHashMap<>();
+        java.util.LinkedHashMap<String, Object> join = new java.util.LinkedHashMap<>();
+        join.put("enabled", config.isJoinNotifyEnabled());
+        notify.put("join", join);
+        java.util.LinkedHashMap<String, Object> quit = new java.util.LinkedHashMap<>();
+        quit.put("enabled", config.isQuitNotifyEnabled());
+        notify.put("quit", quit);
+        root.put("playerNotification", notify);
+
+        // commandExecution
+        java.util.LinkedHashMap<String, Object> commandExecution = new java.util.LinkedHashMap<>();
+        commandExecution.put("enabled", config.isCommandEnabled());
+        commandExecution.put("filterType", config.getCommandFilterMode());
+        commandExecution.put("commandList", config.getCommandFilterList());
+        root.put("commandExecution", commandExecution);
+
+        // logQuery
+        java.util.LinkedHashMap<String, Object> logQuery = new java.util.LinkedHashMap<>();
+        logQuery.put("enabled", config.isLogQueryEnabled());
+        logQuery.put("maxLines", config.getLogQueryMaxLines());
+        logQuery.put("logFile", config.getLogQueryFile());
+        root.put("logQuery", logQuery);
+
+        // updateCheck
+        java.util.LinkedHashMap<String, Object> updateCheck = new java.util.LinkedHashMap<>();
+        updateCheck.put("enabled", config.isUpdateCheckEnabled());
+        updateCheck.put("notifyOps", config.isUpdateNotifyOps());
+        root.put("updateCheck", updateCheck);
         
         return root;
     }
@@ -409,7 +388,6 @@ public class ConfigManager {
         return def;
     }
 
-    @SuppressWarnings("unchecked")
     private List<String> getStringList(Map<String, Object> map, String key) {
         Object value = map.get(key);
         if (value instanceof List) {

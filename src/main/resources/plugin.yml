@@ -29,6 +29,12 @@ permissions:
     description: 允许查看插件状态
     default: op
   astrbot.token:
+    description: 允许查看与生成认证令牌
+    default: op
+  astrbot.connections:
+    description: 允许查看WebSocket连接列表
+    default: op
+  astrbot.token:
     description: 允许管理认证令牌
     default: op
   astrbot.connections:

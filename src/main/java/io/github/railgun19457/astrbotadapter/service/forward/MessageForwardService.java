@@ -65,6 +65,10 @@ public class MessageForwardService {
      * 转发消息到外部
      */
     public void forwardToExternal(UUID playerUuid, String playerName, String displayName, String content) {
+        if (wsServer == null || !wsServer.isRunning()) {
+            logger.warning("WebSocket未启用，无法转发消息");
+            return;
+        }
         // 构建来源信息
         Message.PlayerInfo playerInfo = new Message.PlayerInfo(
                 playerUuid.toString(), playerName, displayName);
@@ -101,9 +105,31 @@ public class MessageForwardService {
         }
 
         JsonObject payload = message.getPayload();
-        String platform = payload.has("platform") ? payload.get("platform").getAsString() : "外部";
-        String username = payload.has("username") ? payload.get("username").getAsString() : "未知";
-        String content = payload.has("content") ? payload.get("content").getAsString() : "";
+        String platform = "外部";
+        String username = "未知";
+        String content = "";
+
+        if (payload.has("source") && payload.get("source").isJsonObject()) {
+            JsonObject source = payload.getAsJsonObject("source");
+            if (source.has("platform")) {
+                platform = source.get("platform").getAsString();
+            }
+            if (source.has("userName")) {
+                username = source.get("userName").getAsString();
+            }
+        }
+
+        if (payload.has("content")) {
+            content = payload.get("content").getAsString();
+        }
+
+        // 兼容旧字段
+        if (payload.has("platform")) {
+            platform = payload.get("platform").getAsString();
+        }
+        if (payload.has("username")) {
+            username = payload.get("username").getAsString();
+        }
 
         if (content.isEmpty()) {
             return;

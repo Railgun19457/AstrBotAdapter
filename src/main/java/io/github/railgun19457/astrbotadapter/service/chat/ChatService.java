@@ -78,6 +78,10 @@ public class ChatService {
      */
     public void sendChatRequest(UUID playerUuid, String playerName, String displayName, 
                                 String content, ChatMode chatMode) {
+        if (wsServer == null || !wsServer.isRunning()) {
+            logger.warning("WebSocket未启用，无法发送AI聊天请求");
+            return;
+        }
         // 构建来源信息
         Message.PlayerInfo playerInfo = new Message.PlayerInfo(
                 playerUuid.toString(), playerName, displayName);
@@ -124,7 +128,10 @@ public class ChatService {
         }
 
         JsonObject payload = message.getPayload();
-        String requestId = payload.has("requestId") ? payload.get("requestId").getAsString() : null;
+        String requestId = message.getReplyTo();
+        if (requestId == null && payload.has("requestId")) {
+            requestId = payload.get("requestId").getAsString();
+        }
         String content = payload.has("content") ? payload.get("content").getAsString() : null;
 
         if (content == null || content.isEmpty()) {
@@ -199,12 +206,10 @@ public class ChatService {
     private static class ChatRequest {
         final UUID playerUuid;
         final ChatMode chatMode;
-        final long timestamp;
 
         ChatRequest(UUID playerUuid, ChatMode chatMode) {
             this.playerUuid = playerUuid;
             this.chatMode = chatMode;
-            this.timestamp = System.currentTimeMillis();
         }
     }
 }

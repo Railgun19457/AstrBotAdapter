@@ -59,7 +59,7 @@ public class AstrbotAdapterBukkit extends JavaPlugin {
 
         // 玩家监听器
         getServer().getPluginManager().registerEvents(
-                new BukkitPlayerListener(plugin.getNotificationService()),
+            new BukkitPlayerListener(this, plugin.getNotificationService()),
                 this
         );
     }

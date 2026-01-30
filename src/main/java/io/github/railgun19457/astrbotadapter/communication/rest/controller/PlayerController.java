@@ -29,8 +29,8 @@ public class PlayerController {
      * 注册路由
      */
     public void registerRoutes(HttpRequestDispatcher dispatcher) {
-        dispatcher.registerRoute("/api/players", this::getPlayerList);
-        dispatcher.registerRoute("/api/players/*", this::getPlayerInfo);
+        dispatcher.registerRoute("/api/v1/players", this::getPlayerList);
+        dispatcher.registerRoute("/api/v1/players/*", this::getPlayerInfo);
     }
 
     /**
@@ -75,7 +75,7 @@ public class PlayerController {
             path = path.substring(0, queryIndex);
         }
         
-        String playerName = path.substring("/api/players/".length());
+        String playerName = path.substring("/api/v1/players/".length());
         if (playerName.isEmpty()) {
             return Response.error(ErrorCode.REQUEST_PARAM_MISSING, "缺少玩家名称");
         }

@@ -1,6 +1,7 @@
 package io.github.railgun19457.astrbotadapter.platform.bukkit.listener;
 
 import io.github.railgun19457.astrbotadapter.service.notification.NotificationService;
+import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
 import org.bukkit.event.EventPriority;
@@ -14,8 +15,10 @@ import org.bukkit.event.player.PlayerQuitEvent;
 public class BukkitPlayerListener implements Listener {
 
     private final NotificationService notificationService;
+    private final JavaPlugin plugin;
 
-    public BukkitPlayerListener(NotificationService notificationService) {
+    public BukkitPlayerListener(JavaPlugin plugin, NotificationService notificationService) {
+        this.plugin = plugin;
         this.notificationService = notificationService;
     }
 
@@ -28,12 +31,12 @@ public class BukkitPlayerListener implements Listener {
         Player player = event.getPlayer();
         
         // 延迟发送，确保玩家完全加入
-        player.getServer().getScheduler().runTaskLaterAsynchronously(
-                player.getServer().getPluginManager().getPlugins()[0], // 获取当前插件
+        plugin.getServer().getScheduler().runTaskLaterAsynchronously(
+            plugin,
                 () -> notificationService.notifyPlayerJoin(
                         player.getUniqueId(),
                         player.getName(),
-                        player.getDisplayName()
+                    player.getName()
                 ),
                 20L // 延迟1秒
         );
@@ -50,7 +53,7 @@ public class BukkitPlayerListener implements Listener {
         notificationService.notifyPlayerQuit(
                 player.getUniqueId(),
                 player.getName(),
-                player.getDisplayName(),
+            player.getName(),
                 null // 离开原因（可从QuitReason获取，如果需要）
         );
     }
