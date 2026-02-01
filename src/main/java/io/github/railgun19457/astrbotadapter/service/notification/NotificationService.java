@@ -1,9 +1,9 @@
 package io.github.railgun19457.astrbotadapter.service.notification;
 
 import com.google.gson.JsonObject;
+import io.github.railgun19457.astrbotadapter.communication.MessageBroadcaster;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
 import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
-import io.github.railgun19457.astrbotadapter.communication.websocket.WebSocketServer;
 import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
 import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
 
@@ -17,14 +17,14 @@ import java.util.logging.Logger;
 public class NotificationService {
 
     private final PluginConfig config;
-    private final WebSocketServer wsServer;
+    private final MessageBroadcaster broadcaster;
     private final PlatformAdapter platformAdapter;
     private final Logger logger;
 
-    public NotificationService(PluginConfig config, WebSocketServer wsServer, 
+    public NotificationService(PluginConfig config, MessageBroadcaster broadcaster, 
                               PlatformAdapter platformAdapter, Logger logger) {
         this.config = config;
-        this.wsServer = wsServer;
+        this.broadcaster = broadcaster;
         this.platformAdapter = platformAdapter;
         this.logger = logger;
     }
@@ -36,9 +36,9 @@ public class NotificationService {
         if (!config.isJoinNotifyEnabled()) {
             return;
         }
-                if (wsServer == null || !wsServer.isRunning()) {
-                        return;
-                }
+        if (broadcaster == null || !broadcaster.isRunning()) {
+            return;
+        }
 
         // 构建来源信息
         Message.PlayerInfo playerInfo = new Message.PlayerInfo(
@@ -62,7 +62,7 @@ public class NotificationService {
                 .build();
 
         // 发送消息
-        wsServer.broadcast(message);
+        broadcaster.broadcast(message);
         
         logger.info("玩家加入通知已发送: " + playerName);
     }
@@ -74,9 +74,9 @@ public class NotificationService {
         if (!config.isQuitNotifyEnabled()) {
             return;
         }
-                if (wsServer == null || !wsServer.isRunning()) {
-                        return;
-                }
+        if (broadcaster == null || !broadcaster.isRunning()) {
+            return;
+        }
 
         // 构建来源信息
         Message.PlayerInfo playerInfo = new Message.PlayerInfo(
@@ -103,7 +103,7 @@ public class NotificationService {
                 .build();
 
         // 发送消息
-        wsServer.broadcast(message);
+        broadcaster.broadcast(message);
         
         logger.info("玩家离开通知已发送: " + playerName);
     }
@@ -112,9 +112,9 @@ public class NotificationService {
      * 发送状态更新
      */
     public void sendStatusUpdate() {
-                if (wsServer == null || !wsServer.isRunning()) {
-                        return;
-                }
+        if (broadcaster == null || !broadcaster.isRunning()) {
+            return;
+        }
         // 构建payload
         JsonObject payload = new JsonObject();
         payload.addProperty("onlinePlayers", platformAdapter.getOnlinePlayerCount());
@@ -132,6 +132,6 @@ public class NotificationService {
                 .build();
 
         // 发送消息
-        wsServer.broadcast(message);
+        broadcaster.broadcast(message);
     }
 }

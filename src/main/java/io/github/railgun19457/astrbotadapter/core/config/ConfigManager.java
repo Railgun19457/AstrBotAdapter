@@ -143,12 +143,37 @@ public class ConfigManager {
         // 服务器设置
         Map<String, Object> server = getMap(yaml, "server");
         if (server != null) {
+            // 新版统一配置：直接在server下的host和port
+            String serverHost = getString(server, "host", null);
+            Integer serverPort = getIntOrNull(server, "port");
+            
+            if (serverHost != null) {
+                config.setServerHost(serverHost);
+            }
+            if (serverPort != null) {
+                config.setServerPort(serverPort);
+            }
+            
             // WebSocket
             Map<String, Object> ws = getMap(server, "websocket");
             if (ws != null) {
                 config.setWsEnabled(getBoolean(ws, "enabled", true));
-                config.setWsHost(getString(ws, "host", "0.0.0.0"));
-                config.setWsPort(getInt(ws, "port", 8765));
+                // 兼容旧配置：如果ws中有host/port，也读取
+                String wsHost = getString(ws, "host", null);
+                Integer wsPort = getIntOrNull(ws, "port");
+                if (wsHost != null) {
+                    config.setWsHost(wsHost);
+                    // 如果没有新版配置，使用旧版作为统一配置
+                    if (serverHost == null) {
+                        config.setServerHost(wsHost);
+                    }
+                }
+                if (wsPort != null) {
+                    config.setWsPort(wsPort);
+                    if (serverPort == null) {
+                        config.setServerPort(wsPort);
+                    }
+                }
                 config.setHeartbeatInterval(getInt(ws, "heartbeatInterval", 30));
                 config.setHeartbeatTimeout(getInt(ws, "heartbeatTimeout", 90));
             }
@@ -157,8 +182,15 @@ public class ConfigManager {
             Map<String, Object> rest = getMap(server, "restapi");
             if (rest != null) {
                 config.setRestEnabled(getBoolean(rest, "enabled", true));
-                config.setRestHost(getString(rest, "host", "0.0.0.0"));
-                config.setRestPort(getInt(rest, "port", 8766));
+                // 兼容旧配置
+                String restHost = getString(rest, "host", null);
+                Integer restPort = getIntOrNull(rest, "port");
+                if (restHost != null) {
+                    config.setRestHost(restHost);
+                }
+                if (restPort != null) {
+                    config.setRestPort(restPort);
+                }
                 config.setRateLimit(getInt(rest, "rateLimit", 100));
             }
         }
@@ -188,6 +220,7 @@ public class ConfigManager {
             if (priv != null) {
                 config.setPrivateChatEnabled(getBoolean(priv, "enabled", true));
                 config.setPrivateChatPrefix(getString(priv, "prefix", "#"));
+                config.setPrivateChatEchoFormat(getString(priv, "echoFormat", "<{player}> {message}"));
             }
 
         }
@@ -274,20 +307,19 @@ public class ConfigManager {
         auth.put("token", config.getToken());
         root.put("auth", auth);
         
-        // server
+        // server - 新版统一配置结构
         java.util.LinkedHashMap<String, Object> server = new java.util.LinkedHashMap<>();
+        server.put("host", config.getServerHost());
+        server.put("port", config.getServerPort());
+        
         java.util.LinkedHashMap<String, Object> ws = new java.util.LinkedHashMap<>();
         ws.put("enabled", config.isWsEnabled());
-        ws.put("host", config.getWsHost());
-        ws.put("port", config.getWsPort());
         ws.put("heartbeatInterval", config.getHeartbeatInterval());
         ws.put("heartbeatTimeout", config.getHeartbeatTimeout());
         server.put("websocket", ws);
         
         java.util.LinkedHashMap<String, Object> rest = new java.util.LinkedHashMap<>();
         rest.put("enabled", config.isRestEnabled());
-        rest.put("host", config.getRestHost());
-        rest.put("port", config.getRestPort());
         rest.put("rateLimit", config.getRateLimit());
         server.put("restapi", rest);
         root.put("server", server);
@@ -310,6 +342,7 @@ public class ConfigManager {
         java.util.LinkedHashMap<String, Object> priv = new java.util.LinkedHashMap<>();
         priv.put("enabled", config.isPrivateChatEnabled());
         priv.put("prefix", config.getPrivateChatPrefix());
+        priv.put("echoFormat", config.getPrivateChatEchoFormat());
         aiChat.put("private", priv);
 
         aiChat.put("responseFormat", config.getAiResponseFormat());
@@ -386,6 +419,17 @@ public class ConfigManager {
             } catch (NumberFormatException ignored) {}
         }
         return def;
+    }
+
+    private Integer getIntOrNull(Map<String, Object> map, String key) {
+        Object value = map.get(key);
+        if (value instanceof Number) return ((Number) value).intValue();
+        if (value instanceof String) {
+            try {
+                return Integer.parseInt((String) value);
+            } catch (NumberFormatException ignored) {}
+        }
+        return null;
     }
 
     private List<String> getStringList(Map<String, Object> map, String key) {

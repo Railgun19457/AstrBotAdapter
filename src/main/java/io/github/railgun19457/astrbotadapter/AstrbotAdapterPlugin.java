@@ -1,5 +1,6 @@
 package io.github.railgun19457.astrbotadapter;
 
+import io.github.railgun19457.astrbotadapter.communication.UnifiedServer;
 import io.github.railgun19457.astrbotadapter.communication.auth.AuthManager;
 import io.github.railgun19457.astrbotadapter.communication.rest.RestApiServer;
 import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
@@ -42,7 +43,10 @@ public abstract class AstrbotAdapterPlugin {
     protected EventBus eventBus;
     protected AuthManager authManager;
 
-    // 通信组件
+    // 通信组件（新版统一服务器）
+    protected UnifiedServer unifiedServer;
+    
+    // 通信组件（保留旧版兼容）
     protected WebSocketServer webSocketServer;
     protected RestApiServer restApiServer;
 
@@ -125,27 +129,16 @@ public abstract class AstrbotAdapterPlugin {
     private void initializeCommunication() {
         PluginConfig config = configManager.getConfig();
 
-        // WebSocket 服务器
-        if (config.isWsEnabled()) {
-            webSocketServer = new WebSocketServer(
+        // 使用统一服务器（WebSocket + REST API 共用端口）
+        if (config.isWsEnabled() || config.isRestEnabled()) {
+            unifiedServer = new UnifiedServer(
                     config,
                     authManager,
                     eventBus,
                     platformAdapter,
                     logger
             );
-            logger.info("WebSocket 服务器已配置");
-        }
-
-        // REST API 服务器
-        if (config.isRestEnabled()) {
-            restApiServer = new RestApiServer(
-                    config,
-                    authManager,
-                    platformAdapter,
-                    logger
-            );
-            logger.info("REST API 服务器已配置");
+            logger.info("统一服务器已配置 (端口: " + config.getServerPort() + ")");
         }
 
         logger.info("通信组件初始化完成");
@@ -157,23 +150,23 @@ public abstract class AstrbotAdapterPlugin {
     private void initializeServices() {
         PluginConfig config = configManager.getConfig();
 
-        // 聊天服务
-        chatService = new ChatService(config, webSocketServer, platformAdapter, logger);
+        // 聊天服务（使用统一服务器）
+        chatService = new ChatService(config, unifiedServer, platformAdapter, logger);
         logger.info("聊天服务已初始化");
 
         // 消息转发服务
-        messageForwardService = new MessageForwardService(config, webSocketServer, platformAdapter, logger);
+        messageForwardService = new MessageForwardService(config, unifiedServer, platformAdapter, logger);
         logger.info("消息转发服务已初始化");
 
         // 通知服务
         if (config.isJoinNotifyEnabled() || config.isQuitNotifyEnabled()) {
-            notificationService = new NotificationService(config, webSocketServer, platformAdapter, logger);
+            notificationService = new NotificationService(config, unifiedServer, platformAdapter, logger);
             logger.info("通知服务已初始化");
         }
 
         // WebSocket入站消息处理
-        if (webSocketServer != null) {
-            webSocketServer.setMessageHandler(this::handleWebSocketMessage);
+        if (unifiedServer != null) {
+            unifiedServer.setMessageHandler(this::handleWebSocketMessage);
         }
 
         logger.info("服务组件初始化完成");
@@ -183,11 +176,8 @@ public abstract class AstrbotAdapterPlugin {
      * 启动服务器
      */
     private void startServers() {
-        if (webSocketServer != null) {
-            webSocketServer.start();
-        }
-        if (restApiServer != null) {
-            restApiServer.start();
+        if (unifiedServer != null) {
+            unifiedServer.start();
         }
     }
 
@@ -198,11 +188,8 @@ public abstract class AstrbotAdapterPlugin {
         logger.info(i18nManager.getMessage(MessageKey.PLUGIN_DISABLING));
 
         // 停止服务器
-        if (webSocketServer != null) {
-            webSocketServer.stop();
-        }
-        if (restApiServer != null) {
-            restApiServer.stop();
+        if (unifiedServer != null) {
+            unifiedServer.stop();
         }
 
         // 关闭平台适配器
@@ -382,11 +369,11 @@ public abstract class AstrbotAdapterPlugin {
                 .payload(responsePayload)
                 .build();
 
-        webSocketServer.broadcast(response);
+        unifiedServer.broadcast(response);
     }
 
     private void sendCommandError(Message request, ErrorCode errorCode, String detail) {
-        if (webSocketServer == null) {
+        if (unifiedServer == null) {
             return;
         }
 
@@ -403,7 +390,7 @@ public abstract class AstrbotAdapterPlugin {
                 .payload(payload)
                 .build();
 
-        webSocketServer.broadcast(error);
+        unifiedServer.broadcast(error);
     }
 
     private boolean isCommandAllowed(String command) {

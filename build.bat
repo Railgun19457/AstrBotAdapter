@@ -9,7 +9,7 @@ set "TARGET=%~1"
 if "%TARGET%"=="" set "TARGET=all"
 
 set "OUTPUT_DIR=releases"
-set "VERSION=2.0.0"
+set "VERSION=2.0.1"
 
 echo.
 echo ========================================

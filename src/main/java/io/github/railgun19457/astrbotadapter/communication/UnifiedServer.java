@@ -1,8 +1,14 @@
-package io.github.railgun19457.astrbotadapter.communication.websocket;
+package io.github.railgun19457.astrbotadapter.communication;
 
-import io.github.railgun19457.astrbotadapter.communication.MessageBroadcaster;
 import io.github.railgun19457.astrbotadapter.communication.auth.AuthManager;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
+import io.github.railgun19457.astrbotadapter.communication.rest.HttpRequestDispatcher;
+import io.github.railgun19457.astrbotadapter.communication.rest.controller.CommandController;
+import io.github.railgun19457.astrbotadapter.communication.rest.controller.LogController;
+import io.github.railgun19457.astrbotadapter.communication.rest.controller.PlayerController;
+import io.github.railgun19457.astrbotadapter.communication.rest.controller.ServerController;
+import io.github.railgun19457.astrbotadapter.communication.websocket.SessionManager;
+import io.github.railgun19457.astrbotadapter.communication.websocket.WebSocketSession;
 import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
 import io.github.railgun19457.astrbotadapter.core.event.EventBus;
 import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
@@ -13,7 +19,6 @@ import io.netty.channel.socket.SocketChannel;
 import io.netty.channel.socket.nio.NioServerSocketChannel;
 import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
-import io.netty.handler.codec.http.websocketx.WebSocketServerProtocolHandler;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateHandler;
 
@@ -22,27 +27,34 @@ import java.util.function.Consumer;
 import java.util.logging.Logger;
 
 /**
- * WebSocket服务器
- * 基于Netty实现的WebSocket服务端
+ * 统一通信服务器
+ * 在同一个端口上同时提供WebSocket和REST API服务
+ * 使用路径分流：/ws -> WebSocket, /api/* -> REST API
  */
-public class WebSocketServer implements MessageBroadcaster {
+public class UnifiedServer implements MessageBroadcaster {
 
     private final PluginConfig config;
     private final AuthManager authManager;
     private final EventBus eventBus;
     private final PlatformAdapter platformAdapter;
     private final Logger logger;
-    private final SessionManager sessionManager;
     
+    // WebSocket相关
+    private final SessionManager sessionManager;
+    private Consumer<Message> messageHandler;
+    
+    // REST相关
+    private HttpRequestDispatcher dispatcher;
+    
+    // Netty组件
     private EventLoopGroup bossGroup;
     private EventLoopGroup workerGroup;
     private Channel serverChannel;
-    private Consumer<Message> messageHandler;
     
     private volatile boolean running = false;
 
-    public WebSocketServer(PluginConfig config, AuthManager authManager, 
-                          EventBus eventBus, PlatformAdapter platformAdapter, Logger logger) {
+    public UnifiedServer(PluginConfig config, AuthManager authManager,
+                        EventBus eventBus, PlatformAdapter platformAdapter, Logger logger) {
         this.config = config;
         this.authManager = authManager;
         this.eventBus = eventBus;
@@ -52,16 +64,20 @@ public class WebSocketServer implements MessageBroadcaster {
     }
 
     /**
-     * 启动WebSocket服务器
+     * 启动统一服务器
      */
     public void start() {
         if (running) {
-            logger.warning("WebSocket服务器已在运行中");
+            logger.warning("统一服务器已在运行中");
             return;
         }
 
-        String host = config.getWsHost();
-        int port = config.getWsPort();
+        String host = config.getServerHost();
+        int port = config.getServerPort();
+
+        // 创建REST请求分发器
+        dispatcher = new HttpRequestDispatcher(authManager, logger, config.getRateLimit());
+        registerDefaultRoutes();
 
         bossGroup = new NioEventLoopGroup(1);
         workerGroup = new NioEventLoopGroup();
@@ -86,10 +102,10 @@ public class WebSocketServer implements MessageBroadcaster {
                             pipeline.addLast(new IdleStateHandler(
                                     config.getHeartbeatTimeout(), 0, 0, TimeUnit.SECONDS));
                             
-                            // 自定义处理器
-                            pipeline.addLast(new WebSocketHandler(
-                                    authManager, eventBus, platformAdapter, 
-                                    logger, sessionManager, messageHandler));
+                            // 统一路由处理器
+                            pipeline.addLast(new UnifiedRequestHandler(
+                                    authManager, eventBus, platformAdapter, logger,
+                                    sessionManager, messageHandler, dispatcher, config));
                         }
                     });
 
@@ -103,24 +119,26 @@ public class WebSocketServer implements MessageBroadcaster {
             serverChannel = future.channel();
             running = true;
             
-            logger.info("WebSocket服务器已启动 - " + host + ":" + port);
+            logger.info("统一服务器已启动 - " + host + ":" + port);
+            logger.info("  WebSocket路径: /ws");
+            logger.info("  REST API路径: /api/*");
             
             // 启动心跳检测任务
             startHeartbeatChecker();
 
         } catch (Exception e) {
-            logger.severe("WebSocket服务器启动失败: " + e.getMessage());
+            logger.severe("统一服务器启动失败: " + e.getMessage());
             stop();
         }
     }
 
     /**
-     * 停止WebSocket服务器
+     * 停止服务器
      */
     public void stop() {
         running = false;
         
-        // 关闭所有会话
+        // 关闭所有WebSocket会话
         sessionManager.closeAll();
         
         // 关闭服务器通道
@@ -139,25 +157,25 @@ public class WebSocketServer implements MessageBroadcaster {
             workerGroup = null;
         }
 
-        logger.info("WebSocket服务器已停止");
+        logger.info("统一服务器已停止");
     }
 
     /**
-     * 广播消息到所有客户端
+     * 广播WebSocket消息到所有客户端
      */
     public void broadcast(Message message) {
         sessionManager.broadcast(message.toJson());
     }
 
     /**
-     * 广播消息到所有客户端
+     * 广播WebSocket消息到所有客户端
      */
     public void broadcast(String message) {
         sessionManager.broadcast(message);
     }
 
     /**
-     * 发送消息到指定会话
+     * 发送WebSocket消息到指定会话
      */
     public void send(String sessionId, Message message) {
         WebSocketSession session = sessionManager.getSession(sessionId);
@@ -167,24 +185,40 @@ public class WebSocketServer implements MessageBroadcaster {
     }
 
     /**
-     * 设置消息处理器
+     * 设置WebSocket消息处理器
      */
     public void setMessageHandler(Consumer<Message> messageHandler) {
         this.messageHandler = messageHandler;
     }
 
     /**
-     * 获取会话管理器
+     * 获取WebSocket会话管理器
      */
     public SessionManager getSessionManager() {
         return sessionManager;
     }
 
     /**
-     * 获取连接数
+     * 获取WebSocket连接数
      */
     public int getConnectionCount() {
         return sessionManager.getSessionCount();
+    }
+
+    /**
+     * 注册REST API路由
+     */
+    public void registerRoute(String path, HttpRequestDispatcher.RouteHandler handler) {
+        if (dispatcher != null) {
+            dispatcher.registerRoute(path, handler);
+        }
+    }
+
+    /**
+     * 获取REST请求分发器
+     */
+    public HttpRequestDispatcher getDispatcher() {
+        return dispatcher;
     }
 
     /**
@@ -192,6 +226,21 @@ public class WebSocketServer implements MessageBroadcaster {
      */
     public boolean isRunning() {
         return running;
+    }
+
+    /**
+     * 注册默认API路由
+     */
+    private void registerDefaultRoutes() {
+        ServerController serverController = new ServerController(platformAdapter);
+        PlayerController playerController = new PlayerController(platformAdapter);
+        CommandController commandController = new CommandController(platformAdapter, config, logger);
+        LogController logController = new LogController(platformAdapter, config);
+
+        serverController.registerRoutes(dispatcher);
+        playerController.registerRoutes(dispatcher);
+        commandController.registerRoutes(dispatcher);
+        logController.registerRoutes(dispatcher);
     }
 
     /**

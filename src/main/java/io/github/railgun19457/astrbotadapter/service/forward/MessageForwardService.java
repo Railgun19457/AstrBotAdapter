@@ -1,9 +1,9 @@
 package io.github.railgun19457.astrbotadapter.service.forward;
 
 import com.google.gson.JsonObject;
+import io.github.railgun19457.astrbotadapter.communication.MessageBroadcaster;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
 import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
-import io.github.railgun19457.astrbotadapter.communication.websocket.WebSocketServer;
 import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
 import io.github.railgun19457.astrbotadapter.core.util.PlaceholderUtil;
 import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
@@ -18,14 +18,14 @@ import java.util.logging.Logger;
 public class MessageForwardService {
 
     private final PluginConfig config;
-    private final WebSocketServer wsServer;
+    private final MessageBroadcaster broadcaster;
     private final PlatformAdapter platformAdapter;
     private final Logger logger;
 
-    public MessageForwardService(PluginConfig config, WebSocketServer wsServer, 
+    public MessageForwardService(PluginConfig config, MessageBroadcaster broadcaster, 
                                 PlatformAdapter platformAdapter, Logger logger) {
         this.config = config;
-        this.wsServer = wsServer;
+        this.broadcaster = broadcaster;
         this.platformAdapter = platformAdapter;
         this.logger = logger;
     }
@@ -65,7 +65,7 @@ public class MessageForwardService {
      * 转发消息到外部
      */
     public void forwardToExternal(UUID playerUuid, String playerName, String displayName, String content) {
-        if (wsServer == null || !wsServer.isRunning()) {
+        if (broadcaster == null || !broadcaster.isRunning()) {
             logger.warning("WebSocket未启用，无法转发消息");
             return;
         }
@@ -91,7 +91,7 @@ public class MessageForwardService {
                 .build();
 
         // 发送消息
-        wsServer.broadcast(message);
+        broadcaster.broadcast(message);
         
         logger.info("消息已转发: " + playerName + " -> " + content);
     }

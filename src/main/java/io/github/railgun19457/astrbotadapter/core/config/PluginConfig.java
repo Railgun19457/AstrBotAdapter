@@ -13,17 +13,21 @@ public class PluginConfig {
     // 认证设置
     private String token = "";
 
+    // 统一服务器配置（新）
+    private String serverHost = "0.0.0.0";
+    private int serverPort = 8765;
+
     // WebSocket 服务器配置
     private boolean wsEnabled = true;
-    private String wsHost = "0.0.0.0";
-    private int wsPort = 8765;
+    private String wsHost = "0.0.0.0";  // 保留用于兼容旧配置
+    private int wsPort = 8765;           // 保留用于兼容旧配置
     private int heartbeatInterval = 30;
     private int heartbeatTimeout = 90;
 
     // REST API 服务器配置
     private boolean restEnabled = true;
-    private String restHost = "0.0.0.0";
-    private int restPort = 8766;
+    private String restHost = "0.0.0.0"; // 保留用于兼容旧配置
+    private int restPort = 8766;          // 保留用于兼容旧配置
     private int rateLimit = 100;
 
     // 消息转发配置
@@ -39,6 +43,7 @@ public class PluginConfig {
     // AI 私聊配置
     private boolean privateChatEnabled = true;
     private String privateChatPrefix = "#";
+    private String privateChatEchoFormat = "<{player}> {message}";
 
     // AI 回复格式
     private String aiResponseFormat = "§7[§dAI§7] §f{content}";
@@ -88,6 +93,22 @@ public class PluginConfig {
 
     public void setToken(String token) {
         this.token = token;
+    }
+
+    public String getServerHost() {
+        return serverHost;
+    }
+
+    public void setServerHost(String serverHost) {
+        this.serverHost = serverHost;
+    }
+
+    public int getServerPort() {
+        return serverPort;
+    }
+
+    public void setServerPort(int serverPort) {
+        this.serverPort = serverPort;
     }
 
     public boolean isWsEnabled() {
@@ -224,6 +245,14 @@ public class PluginConfig {
 
     public void setPrivateChatPrefix(String privateChatPrefix) {
         this.privateChatPrefix = privateChatPrefix;
+    }
+
+    public String getPrivateChatEchoFormat() {
+        return privateChatEchoFormat;
+    }
+
+    public void setPrivateChatEchoFormat(String privateChatEchoFormat) {
+        this.privateChatEchoFormat = privateChatEchoFormat;
     }
 
     public String getAiResponseFormat() {

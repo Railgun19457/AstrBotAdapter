@@ -1,9 +1,9 @@
 package io.github.railgun19457.astrbotadapter.service.chat;
 
 import com.google.gson.JsonObject;
+import io.github.railgun19457.astrbotadapter.communication.MessageBroadcaster;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
 import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
-import io.github.railgun19457.astrbotadapter.communication.websocket.WebSocketServer;
 import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
 import io.github.railgun19457.astrbotadapter.core.util.PlaceholderUtil;
 import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
@@ -22,17 +22,17 @@ import java.util.logging.Logger;
 public class ChatService {
 
     private final PluginConfig config;
-    private final WebSocketServer wsServer;
+    private final MessageBroadcaster broadcaster;
     private final PlatformAdapter platformAdapter;
     private final Logger logger;
     
     // 存储等待响应的请求
     private final Map<String, ChatRequest> pendingRequests = new ConcurrentHashMap<>();
 
-    public ChatService(PluginConfig config, WebSocketServer wsServer, 
+    public ChatService(PluginConfig config, MessageBroadcaster broadcaster, 
                       PlatformAdapter platformAdapter, Logger logger) {
         this.config = config;
-        this.wsServer = wsServer;
+        this.broadcaster = broadcaster;
         this.platformAdapter = platformAdapter;
         this.logger = logger;
     }
@@ -78,7 +78,7 @@ public class ChatService {
      */
     public void sendChatRequest(UUID playerUuid, String playerName, String displayName, 
                                 String content, ChatMode chatMode) {
-        if (wsServer == null || !wsServer.isRunning()) {
+        if (broadcaster == null || !broadcaster.isRunning()) {
             logger.warning("WebSocket未启用，无法发送AI聊天请求");
             return;
         }
@@ -114,7 +114,7 @@ public class ChatService {
         pendingRequests.put(message.getId(), new ChatRequest(playerUuid, chatMode));
 
         // 发送消息
-        wsServer.broadcast(message);
+        broadcaster.broadcast(message);
         
         logger.info("发送AI聊天请求: " + playerName + " -> " + content + " [" + chatMode + "]");
     }
@@ -198,6 +198,26 @@ public class ChatService {
         }
 
         return false;
+    }
+
+    /**
+     * 检查消息是否触发AI私聊
+     */
+    public boolean isPrivateChatTrigger(String message) {
+        if (config.isPrivateChatEnabled()) {
+            String privatePrefix = config.getPrivateChatPrefix();
+            if (privatePrefix != null && !privatePrefix.isEmpty() && message.startsWith(privatePrefix)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * 获取配置
+     */
+    public PluginConfig getConfig() {
+        return config;
     }
 
     /**
