@@ -10,6 +10,10 @@ import io.github.railgun19457.astrbotadapter.platform.common.CommonServer;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
+
 /**
  * 服务器信息控制器
  */
@@ -38,17 +42,20 @@ public class ServerController {
             return Response.error(ErrorCode.REQUEST_PARAM_ERROR, "仅支持GET请求");
         }
 
-        CommonServer server = platformAdapter.getServer();
-        
-        JsonObject data = new JsonObject();
-        data.addProperty("name", server.getName());
-        data.addProperty("platform", platformAdapter.getPlatformType().getDisplayName());
-        data.addProperty("version", server.getVersion());
-        data.addProperty("motd", server.getMotd());
-        data.addProperty("maxPlayers", server.getMaxPlayers());
-        data.addProperty("onlinePlayers", server.getOnlinePlayerCount());
-        data.addProperty("port", server.getPort());
-        
+        JsonObject data = runOnServerThread(() -> {
+            CommonServer server = platformAdapter.getServer();
+
+            JsonObject result = new JsonObject();
+            result.addProperty("name", server.getName());
+            result.addProperty("platform", platformAdapter.getPlatformType().getDisplayName());
+            result.addProperty("version", server.getVersion());
+            result.addProperty("motd", server.getMotd());
+            result.addProperty("maxPlayers", server.getMaxPlayers());
+            result.addProperty("onlinePlayers", server.getOnlinePlayerCount());
+            result.addProperty("port", server.getPort());
+            return result;
+        });
+
         return Response.success(data);
     }
 
@@ -60,24 +67,30 @@ public class ServerController {
             return Response.error(ErrorCode.REQUEST_PARAM_ERROR, "仅支持GET请求");
         }
 
-        CommonServer server = platformAdapter.getServer();
-        
-        JsonObject data = new JsonObject();
-        data.addProperty("online", true);
-        data.addProperty("onlinePlayers", server.getOnlinePlayerCount());
-        data.addProperty("maxPlayers", server.getMaxPlayers());
-        data.addProperty("uptime", server.getUptime());
-        data.addProperty("uptimeFormatted", formatUptime(server.getUptime()));
-        
-        // TPS（仅后端服务器有效）
-        double[] tps = server.getTps();
-        if (tps != null && tps.length >= 3) {
-            JsonObject tpsData = new JsonObject();
-            tpsData.addProperty("1m", Math.round(tps[0] * 100.0) / 100.0);
-            tpsData.addProperty("5m", Math.round(tps[1] * 100.0) / 100.0);
-            tpsData.addProperty("15m", Math.round(tps[2] * 100.0) / 100.0);
-            data.add("tps", tpsData);
-        }
+        JsonObject data = runOnServerThread(() -> {
+            CommonServer server = platformAdapter.getServer();
+
+            JsonObject result = new JsonObject();
+            result.addProperty("online", true);
+            result.addProperty("onlinePlayers", server.getOnlinePlayerCount());
+            result.addProperty("maxPlayers", server.getMaxPlayers());
+
+            long uptime = server.getUptime();
+            result.addProperty("uptime", uptime);
+            result.addProperty("uptimeFormatted", formatUptime(uptime));
+
+            // TPS（仅后端服务器有效）
+            double[] tps = server.getTps();
+            if (tps != null && tps.length >= 3) {
+                JsonObject tpsData = new JsonObject();
+                tpsData.addProperty("1m", Math.round(tps[0] * 100.0) / 100.0);
+                tpsData.addProperty("5m", Math.round(tps[1] * 100.0) / 100.0);
+                tpsData.addProperty("15m", Math.round(tps[2] * 100.0) / 100.0);
+                result.add("tps", tpsData);
+            }
+
+            return result;
+        });
 
         // 内存使用
         Runtime runtime = Runtime.getRuntime();
@@ -98,19 +111,47 @@ public class ServerController {
             return Response.error(ErrorCode.REQUEST_PARAM_ERROR, "仅支持GET请求");
         }
 
-        CommonServer server = platformAdapter.getServer();
-        double[] tps = server.getTps();
-        
-        if (tps == null) {
+        JsonObject data = runOnServerThread(() -> {
+            CommonServer server = platformAdapter.getServer();
+            double[] tps = server.getTps();
+
+            if (tps == null) {
+                return null;
+            }
+
+            JsonObject result = new JsonObject();
+            result.addProperty("1m", Math.round(tps[0] * 100.0) / 100.0);
+            result.addProperty("5m", Math.round(tps[1] * 100.0) / 100.0);
+            result.addProperty("15m", Math.round(tps[2] * 100.0) / 100.0);
+            return result;
+        });
+
+        if (data == null) {
             return Response.error(ErrorCode.FEATURE_DISABLED, "当前平台不支持TPS查询");
         }
 
-        JsonObject data = new JsonObject();
-        data.addProperty("1m", Math.round(tps[0] * 100.0) / 100.0);
-        data.addProperty("5m", Math.round(tps[1] * 100.0) / 100.0);
-        data.addProperty("15m", Math.round(tps[2] * 100.0) / 100.0);
-
         return Response.success(data);
+    }
+
+    private <T> T runOnServerThread(Supplier<T> supplier) {
+        if (platformAdapter.getScheduler().isMainThread()) {
+            return supplier.get();
+        }
+
+        CompletableFuture<T> future = new CompletableFuture<>();
+        platformAdapter.getScheduler().runSync(() -> {
+            try {
+                future.complete(supplier.get());
+            } catch (Throwable throwable) {
+                future.completeExceptionally(throwable);
+            }
+        });
+
+        try {
+            return future.get(3, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new RuntimeException("获取服务器状态失败", e);
+        }
     }
 
     private String formatUptime(long millis) {

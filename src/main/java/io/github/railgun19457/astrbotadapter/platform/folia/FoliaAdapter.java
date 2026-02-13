@@ -104,19 +104,39 @@ public class FoliaAdapter implements PlatformAdapter {
 
     @Override
     public void broadcastMessage(String message) {
-        Bukkit.broadcastMessage(message);
+        Runnable broadcastTask = () -> {
+            // Folia下不要依赖 Bukkit.broadcastMessage 的内部线程行为，
+            // 逐玩家切到对应区域线程发送，避免“控制台可见、玩家不可见”。
+            for (Player onlinePlayer : Bukkit.getOnlinePlayers()) {
+                onlinePlayer.getScheduler().run(plugin, task -> onlinePlayer.sendMessage(message), null);
+            }
+            Bukkit.getConsoleSender().sendMessage(message);
+        };
+
+        if (scheduler.isMainThread()) {
+            broadcastTask.run();
+        } else {
+            scheduler.runSync(broadcastTask);
+        }
     }
 
     @Override
     public void sendMessage(CommonPlayer player, String message) {
         if (player instanceof BukkitPlayer) {
-            ((BukkitPlayer) player).getBukkitPlayer().sendMessage(message);
+            Player bukkitPlayer = ((BukkitPlayer) player).getBukkitPlayer();
+            // Folia中玩家消息应在玩家区域线程执行
+            bukkitPlayer.getScheduler().run(plugin, task -> bukkitPlayer.sendMessage(message), null);
         }
     }
 
     @Override
     public void sendConsoleMessage(String message) {
-        Bukkit.getConsoleSender().sendMessage(message);
+        if (scheduler.isMainThread()) {
+            Bukkit.getConsoleSender().sendMessage(message);
+            return;
+        }
+
+        scheduler.runSync(() -> Bukkit.getConsoleSender().sendMessage(message));
     }
 
     @Override
