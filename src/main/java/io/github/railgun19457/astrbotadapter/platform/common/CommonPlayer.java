@@ -94,6 +94,70 @@ public interface CommonPlayer {
     }
 
     /**
+     * 获取玩家饥饿值
+     * @return 饥饿值，代理端返回-1
+     */
+    default int getFoodLevel() {
+        return -1;
+    }
+
+    /**
+     * 获取玩家经验比例
+     * @return 经验比例(0-1)，代理端返回-1
+     */
+    default float getExp() {
+        return -1;
+    }
+
+    /**
+     * 获取玩家总经验
+     * @return 总经验，代理端返回-1
+     */
+    default int getTotalExp() {
+        return -1;
+    }
+
+    /**
+     * 是否为管理员
+     * @return 是否为OP，代理端返回false
+     */
+    default boolean isOp() {
+        return false;
+    }
+
+    /**
+     * 是否正在飞行
+     * @return 是否飞行，代理端返回false
+     */
+    default boolean isFlying() {
+        return false;
+    }
+
+    /**
+     * 获取首次进入服务器时间戳
+     * @return 时间戳(毫秒)，代理端返回-1
+     */
+    default long getFirstPlayed() {
+        return -1;
+    }
+
+    /**
+     * 获取最后一次离线时间戳
+     * @return 时间戳(毫秒)，代理端返回-1
+     */
+    default long getLastPlayed() {
+        return -1;
+    }
+
+    /**
+     * 获取在线时长
+     * @return 在线时长(毫秒)，代理端返回-1
+     */
+    default long getOnlineTime() {
+        return -1;
+    }
+
+    /**
      * 获取玩家当前连接的服务器名称（仅代理端有效）
      * @return 服务器名称，后端返回null
      */

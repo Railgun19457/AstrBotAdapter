@@ -17,11 +17,13 @@ import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
 import io.github.railgun19457.astrbotadapter.service.chat.ChatService;
 import io.github.railgun19457.astrbotadapter.service.forward.MessageForwardService;
 import io.github.railgun19457.astrbotadapter.service.notification.NotificationService;
+import com.google.gson.JsonArray;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import java.util.logging.Logger;
@@ -57,6 +59,9 @@ public abstract class AstrbotAdapterPlugin {
 
     // 平台适配器
     protected PlatformAdapter platformAdapter;
+
+    private static final int COMMAND_LOG_LIMIT = 200;
+    private static final long COMMAND_LOG_CAPTURE_BUFFER_MS = 1500;
 
     /**
      * 获取插件实例
@@ -330,6 +335,7 @@ public abstract class AstrbotAdapterPlugin {
         boolean success = false;
         String executor = JsonUtil.getString(payload, "executor", "CONSOLE");
         String playerUuid = JsonUtil.getString(payload, "playerUuid", null);
+        long startTime = System.currentTimeMillis();
 
         try {
             if ("PLAYER".equalsIgnoreCase(executor)) {
@@ -350,12 +356,23 @@ public abstract class AstrbotAdapterPlugin {
             logger.warning("外部指令执行异常: " + e.getMessage());
             success = false;
         }
+        long endTime = System.currentTimeMillis();
 
         JsonObject responsePayload = new JsonObject();
         responsePayload.addProperty("success", success);
         responsePayload.addProperty("command", command);
         responsePayload.addProperty("output", success ? "Command executed" : "Command execute failed");
         if (success) {
+            responsePayload.addProperty("executionTime", endTime - startTime);
+            List<String> logs = collectCommandLogs(startTime, endTime);
+            if (!logs.isEmpty()) {
+                JsonArray logArray = new JsonArray();
+                for (String log : logs) {
+                    logArray.add(log);
+                }
+                responsePayload.add("logs", logArray);
+                responsePayload.addProperty("output", String.join("\n", logs));
+            }
             responsePayload.add("errorCode", JsonNull.INSTANCE);
             responsePayload.add("errorMessage", JsonNull.INSTANCE);
         } else {
@@ -370,6 +387,29 @@ public abstract class AstrbotAdapterPlugin {
                 .build();
 
         unifiedServer.broadcast(response);
+    }
+
+    private List<String> collectCommandLogs(long startTime, long endTime) {
+        if (platformAdapter == null) {
+            return List.of();
+        }
+
+        long from = Math.max(0, startTime - COMMAND_LOG_CAPTURE_BUFFER_MS);
+        long to = endTime + COMMAND_LOG_CAPTURE_BUFFER_MS;
+        List<String> logs;
+        try {
+            logs = platformAdapter.getLogsByTimeRange(from, to);
+        } catch (Exception e) {
+            logger.warning("获取指令日志失败: " + e.getMessage());
+            return List.of();
+        }
+
+        if (logs == null || logs.isEmpty()) {
+            return List.of();
+        }
+
+        int start = Math.max(0, logs.size() - COMMAND_LOG_LIMIT);
+        return new ArrayList<>(logs.subList(start, logs.size()));
     }
 
     private void sendCommandError(Message request, ErrorCode errorCode, String detail) {

@@ -1,6 +1,7 @@
 package io.github.railgun19457.astrbotadapter.platform.bukkit;
 
 import io.github.railgun19457.astrbotadapter.platform.common.CommonPlayer;
+import org.bukkit.Statistic;
 import org.bukkit.entity.Player;
 
 import java.util.UUID;
@@ -84,6 +85,51 @@ public class BukkitPlayer implements CommonPlayer {
     @Override
     public String getGameMode() {
         return player.getGameMode().name();
+    }
+
+    @Override
+    public int getFoodLevel() {
+        return player.getFoodLevel();
+    }
+
+    @Override
+    public float getExp() {
+        return player.getExp();
+    }
+
+    @Override
+    public int getTotalExp() {
+        return player.getTotalExperience();
+    }
+
+    @Override
+    public boolean isOp() {
+        return player.isOp();
+    }
+
+    @Override
+    public boolean isFlying() {
+        return player.isFlying();
+    }
+
+    @Override
+    public long getFirstPlayed() {
+        return player.getFirstPlayed();
+    }
+
+    @Override
+    public long getLastPlayed() {
+        return player.getLastPlayed();
+    }
+
+    @Override
+    public long getOnlineTime() {
+        try {
+            int ticks = player.getStatistic(Statistic.PLAY_ONE_MINUTE);
+            return ticks * 50L;
+        } catch (Exception ignored) {
+            return -1;
+        }
     }
 
     /**

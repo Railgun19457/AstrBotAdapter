@@ -1,5 +1,6 @@
 package io.github.railgun19457.astrbotadapter.communication.rest.controller;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Response;
@@ -11,6 +12,7 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.logging.Logger;
 
@@ -22,6 +24,9 @@ public class CommandController {
     private final PlatformAdapter platformAdapter;
     private final PluginConfig config;
     private final Logger logger;
+
+    private static final int COMMAND_LOG_LIMIT = 200;
+    private static final long COMMAND_LOG_CAPTURE_BUFFER_MS = 1500;
 
     public CommandController(PlatformAdapter platformAdapter, PluginConfig config, Logger logger) {
         this.platformAdapter = platformAdapter;
@@ -75,14 +80,28 @@ public class CommandController {
         }
 
         // 执行指令
+        long startTime = System.currentTimeMillis();
         try {
             boolean success = platformAdapter.executeCommand(command);
+            long endTime = System.currentTimeMillis();
             
             JsonObject data = new JsonObject();
             data.addProperty("command", command);
             data.addProperty("success", success);
+            data.addProperty("executionTime", endTime - startTime);
 
             if (success) {
+                List<String> logs = collectCommandLogs(startTime, endTime);
+                if (!logs.isEmpty()) {
+                    JsonArray logArray = new JsonArray();
+                    for (String log : logs) {
+                        logArray.add(log);
+                    }
+                    data.add("logs", logArray);
+                    data.addProperty("output", String.join("\n", logs));
+                } else {
+                    data.addProperty("output", "Command executed");
+                }
                 logger.info("外部指令执行成功: " + command);
                 return Response.success(data);
             } else {
@@ -122,5 +141,28 @@ public class CommandController {
         }
         String regex = pattern.replace("*", ".*");
         return command.matches("(?i)" + regex);
+    }
+
+    private List<String> collectCommandLogs(long startTime, long endTime) {
+        if (platformAdapter == null) {
+            return List.of();
+        }
+
+        long from = Math.max(0, startTime - COMMAND_LOG_CAPTURE_BUFFER_MS);
+        long to = endTime + COMMAND_LOG_CAPTURE_BUFFER_MS;
+        List<String> logs;
+        try {
+            logs = platformAdapter.getLogsByTimeRange(from, to);
+        } catch (Exception e) {
+            logger.warning("获取指令日志失败: " + e.getMessage());
+            return List.of();
+        }
+
+        if (logs == null || logs.isEmpty()) {
+            return List.of();
+        }
+
+        int start = Math.max(0, logs.size() - COMMAND_LOG_LIMIT);
+        return new ArrayList<>(logs.subList(start, logs.size()));
     }
 }

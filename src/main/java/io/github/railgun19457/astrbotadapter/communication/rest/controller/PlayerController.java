@@ -49,6 +49,18 @@ public class PlayerController {
             playerData.addProperty("name", player.getName());
             playerData.addProperty("displayName", player.getDisplayName());
             playerData.addProperty("ping", player.getPing());
+
+            if (platformAdapter.getPlatformType().isBackend()) {
+                String world = player.getWorld();
+                String gameMode = player.getGameMode();
+                if (world != null) {
+                    playerData.addProperty("world", world);
+                }
+                if (gameMode != null) {
+                    playerData.addProperty("gameMode", gameMode);
+                }
+                playerData.addProperty("isOp", player.isOp());
+            }
             
             players.add(playerData);
         }
@@ -100,9 +112,22 @@ public class PlayerController {
         if (platformAdapter.getPlatformType().isBackend()) {
             data.addProperty("health", player.getHealth());
             data.addProperty("maxHealth", player.getMaxHealth());
+            data.addProperty("foodLevel", player.getFoodLevel());
             data.addProperty("level", player.getLevel());
+            data.addProperty("exp", player.getExp());
+            data.addProperty("totalExp", player.getTotalExp());
             data.addProperty("gameMode", player.getGameMode());
             data.addProperty("world", player.getWorld());
+            data.addProperty("isOp", player.isOp());
+            data.addProperty("isFlying", player.isFlying());
+            data.addProperty("firstPlayed", player.getFirstPlayed());
+            data.addProperty("lastPlayed", player.getLastPlayed());
+
+            long onlineTime = player.getOnlineTime();
+            if (onlineTime >= 0) {
+                data.addProperty("onlineTime", onlineTime);
+                data.addProperty("onlineTimeFormatted", formatDuration(onlineTime));
+            }
             
             CommonPlayer.PlayerLocation loc = player.getLocation();
             if (loc != null) {
@@ -124,5 +149,27 @@ public class PlayerController {
         }
 
         return Response.success(data);
+    }
+
+    private String formatDuration(long millis) {
+        long seconds = millis / 1000;
+        long minutes = seconds / 60;
+        long hours = minutes / 60;
+        long days = hours / 24;
+
+        long remainingSeconds = seconds % 60;
+        long remainingMinutes = minutes % 60;
+        long remainingHours = hours % 24;
+
+        StringBuilder sb = new StringBuilder();
+        if (days > 0) {
+            sb.append(days).append("d ");
+        }
+        if (hours > 0 || days > 0) {
+            sb.append(remainingHours).append("h ");
+        }
+        sb.append(remainingMinutes).append("m ");
+        sb.append(remainingSeconds).append("s");
+        return sb.toString().trim();
     }
 }
