@@ -44,6 +44,7 @@ public class VelocityProxyBridge {
     private static final int SECRET_LENGTH = 32;
     private static final long BACKEND_TIMEOUT_MS = 120_000; // 2 minutes
     private static final String SECRET_FILE_NAME = "proxy-secret.txt";
+    private static final long UNAUTH_WARN_INTERVAL_MS = 30_000L;
 
     private final Object plugin;
     private final ProxyServer proxy;
@@ -56,6 +57,8 @@ public class VelocityProxyBridge {
 
     // Registered backend servers: serverName → info
     private final Map<String, BackendServerInfo> backendServers = new ConcurrentHashMap<>();
+    // Throttle unauthenticated backend warnings per server
+    private final Map<String, Long> lastUnauthWarnTime = new ConcurrentHashMap<>();
 
     // Message broadcaster for forwarding to Astrbot via WebSocket
     private MessageBroadcaster broadcaster;
@@ -192,6 +195,14 @@ public class VelocityProxyBridge {
      * Process a message from a backend server.
      */
     private void handleBackendMessage(String senderServer, ServerConnection serverConn, ProxyMessage msg) {
+        // If backend timed out and was removed, it may still think it's authenticated.
+        // Force it to re-authenticate when any non-auth message arrives.
+        if (msg.getType() != ProxyMessageType.AUTH_REQUEST && !isBackendAuthenticated(senderServer)) {
+            sendAuthResponse(serverConn, false, "Not authenticated, please re-authenticate");
+            warnUnauthenticatedBackend(senderServer, msg.getType().name());
+            return;
+        }
+
         switch (msg.getType()) {
             case AUTH_REQUEST -> handleAuthRequest(senderServer, serverConn, msg);
             case SERVER_INFO_REPORT -> handleServerInfoReport(senderServer, msg);
@@ -545,10 +556,24 @@ public class VelocityProxyBridge {
     private BackendServerInfo getAuthenticatedBackend(String serverName) {
         BackendServerInfo info = backendServers.get(serverName);
         if (info == null || !info.isAuthenticated()) {
-            logger.warning("Received message from unauthenticated backend: " + serverName);
             return null;
         }
         return info;
+    }
+
+    private boolean isBackendAuthenticated(String serverName) {
+        BackendServerInfo info = backendServers.get(serverName);
+        return info != null && info.isAuthenticated();
+    }
+
+    private void warnUnauthenticatedBackend(String serverName, String messageType) {
+        long now = System.currentTimeMillis();
+        long last = lastUnauthWarnTime.getOrDefault(serverName, 0L);
+        if (now - last >= UNAUTH_WARN_INTERVAL_MS) {
+            logger.warning("Received message from unauthenticated backend: " + serverName
+                    + " (type=" + messageType + "), requesting re-authentication");
+            lastUnauthWarnTime.put(serverName, now);
+        }
     }
 
     /**
@@ -558,6 +583,7 @@ public class VelocityProxyBridge {
         backendServers.entrySet().removeIf(entry -> {
             if (!entry.getValue().isAlive(BACKEND_TIMEOUT_MS)) {
                 logger.info("后端服务器 " + entry.getKey() + " 超时，已移除");
+                lastUnauthWarnTime.remove(entry.getKey());
                 return true;
             }
             return false;

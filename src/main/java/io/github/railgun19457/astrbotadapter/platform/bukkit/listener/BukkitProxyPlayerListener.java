@@ -22,28 +22,24 @@ public class BukkitProxyPlayerListener implements Listener {
 
     @EventHandler(priority = EventPriority.MONITOR, ignoreCancelled = true)
     public void onPlayerJoin(PlayerJoinEvent event) {
-        if (proxyClient == null || !proxyClient.isAuthenticated()) {
+        if (proxyClient == null) {
             return;
         }
 
         Player player = event.getPlayer();
-        proxyClient.reportPlayerJoin(
-                player.getUniqueId(),
-                player.getName(),
-                player.getDisplayName()
-        );
 
-        // Also report detailed player data
-        // Delay slightly to ensure player data is fully loaded
-        player.getServer().getScheduler().runTaskLater(
-                player.getServer().getPluginManager().getPlugin("AstrbotAdapter"),
-                () -> {
-                    if (player.isOnline()) {
-                        proxyClient.reportPlayerData(
-                                new io.github.railgun19457.astrbotadapter.platform.bukkit.BukkitPlayer(player));
-                    }
-                }, 20L // 1 second delay
-        );
+        // Try immediate authentication when first player joins (plugin messages need a player connection)
+        if (!proxyClient.isAuthenticated()) {
+            proxyClient.sendAuthRequest();
+
+            // If auth succeeds quickly, report join immediately in current tick.
+            if (proxyClient.isAuthenticated()) {
+                reportJoinAndData(player);
+            }
+            return;
+        }
+
+        reportJoinAndData(player);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)
@@ -59,5 +55,20 @@ public class BukkitProxyPlayerListener implements Listener {
                 player.getDisplayName(),
                 "QUIT"
         );
+    }
+
+    private void reportJoinAndData(Player player) {
+        proxyClient.reportPlayerJoin(
+                player.getUniqueId(),
+                player.getName(),
+                player.getDisplayName()
+        );
+
+        // Also report detailed player data immediately.
+        // (Avoid Bukkit scheduler APIs here for Folia compatibility.)
+        if (player.isOnline()) {
+            proxyClient.reportPlayerData(
+                    new io.github.railgun19457.astrbotadapter.platform.bukkit.BukkitPlayer(player));
+        }
     }
 }

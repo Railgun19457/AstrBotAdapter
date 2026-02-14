@@ -37,6 +37,8 @@ public class BukkitProxyClient implements PluginMessageListener {
 
     private volatile boolean authenticated = false;
     private Consumer<ProxyMessage> messageHandler;
+    private long lastNoPlayerAuthLogTime = 0L;
+    private static final long NO_PLAYER_AUTH_LOG_INTERVAL_MS = 60_000L;
 
     // Pending command results keyed by request ID
     private final ConcurrentHashMap<String, Consumer<JsonObject>> pendingCallbacks = new ConcurrentHashMap<>();
@@ -97,8 +99,15 @@ public class BukkitProxyClient implements PluginMessageListener {
                 .data(data)
                 .build();
 
-        sendMessage(msg);
-        logger.info("已向代理端发送认证请求");
+        if (sendMessage(msg)) {
+            logger.info("已向代理端发送认证请求");
+        } else {
+            long now = System.currentTimeMillis();
+            if (now - lastNoPlayerAuthLogTime >= NO_PLAYER_AUTH_LOG_INTERVAL_MS) {
+                logger.info("当前无在线玩家，暂无法通过Plugin Messaging完成认证，等待玩家上线后自动重试");
+                lastNoPlayerAuthLogTime = now;
+            }
+        }
     }
 
     /**
@@ -369,6 +378,13 @@ public class BukkitProxyClient implements PluginMessageListener {
         } else {
             authenticated = false;
             logger.severe("代理端认证失败: " + message);
+
+            // Fast recovery for stale auth sessions after proxy timeout cleanup.
+            // If proxy explicitly asks re-authentication and players are online,
+            // retry immediately instead of waiting for the periodic timer.
+            if (message != null && message.toLowerCase().contains("re-auth")) {
+                sendAuthRequest();
+            }
         }
     }
 
@@ -535,11 +551,11 @@ public class BukkitProxyClient implements PluginMessageListener {
     /**
      * Send a ProxyMessage to the proxy via Plugin Messaging Channel.
      */
-    public void sendMessage(ProxyMessage msg) {
+    public boolean sendMessage(ProxyMessage msg) {
         // Need at least one online player to send plugin messages
         Collection<? extends Player> players = Bukkit.getOnlinePlayers();
         if (players.isEmpty()) {
-            return; // Cannot send plugin messages without online players
+            return false; // Cannot send plugin messages without online players
         }
 
         try {
@@ -550,13 +566,15 @@ public class BukkitProxyClient implements PluginMessageListener {
             byte[] data = byteOut.toByteArray();
             if (data.length > ProxyChannel.MAX_PAYLOAD_SIZE) {
                 logger.warning("Proxy message too large (" + data.length + " bytes), dropping");
-                return;
+                return false;
             }
 
             Player sender = players.iterator().next();
             sender.sendPluginMessage(plugin, ProxyChannel.CHANNEL_ID, data);
+            return true;
         } catch (IOException e) {
             logger.warning("Failed to send proxy message: " + e.getMessage());
+            return false;
         }
     }
 
