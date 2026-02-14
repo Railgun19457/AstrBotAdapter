@@ -216,16 +216,19 @@ public class VelocityProxyBridge {
         }
 
         String receivedSecret = data.has("secret") ? data.get("secret").getAsString() : "";
-        String serverName = data.has("serverName") ? data.get("serverName").getAsString() : senderServer;
+        // Always use the Velocity-registered server name as the canonical key,
+        // since all subsequent plugin messages will be keyed by this name.
+        // The backend-reported name is only used for display purposes.
+        String backendReportedName = data.has("serverName") ? data.get("serverName").getAsString() : senderServer;
 
         if (!this.secret.equals(receivedSecret)) {
             sendAuthResponse(serverConn, false, "Invalid secret");
-            logger.warning("后端服务器 " + serverName + " 认证失败: Secret不匹配");
+            logger.warning("后端服务器 " + senderServer + " 认证失败: Secret不匹配");
             return;
         }
 
-        // Create or update backend server info
-        BackendServerInfo info = backendServers.computeIfAbsent(serverName, BackendServerInfo::new);
+        // Create or update backend server info, keyed by Velocity server name
+        BackendServerInfo info = backendServers.computeIfAbsent(senderServer, BackendServerInfo::new);
         info.setAuthenticated(true);
 
         // Update with initial info from auth request
@@ -234,7 +237,7 @@ public class VelocityProxyBridge {
         }
 
         sendAuthResponse(serverConn, true, "认证成功");
-        logger.info("后端服务器 " + serverName + " 已通过认证 [" +
+        logger.info("后端服务器 " + senderServer + " (" + backendReportedName + ") 已通过认证 [" +
                 (data.has("platform") ? data.get("platform").getAsString() : "Unknown") + "]");
 
         // Sync configuration to backend after successful auth

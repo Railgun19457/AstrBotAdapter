@@ -13,7 +13,6 @@ import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
 import io.github.railgun19457.astrbotadapter.communication.proxy.VelocityProxyBridge;
 import io.github.railgun19457.astrbotadapter.core.config.ConfigManager.ConfigPlatform;
 import io.github.railgun19457.astrbotadapter.platform.velocity.VelocityAdapter;
-import io.github.railgun19457.astrbotadapter.platform.velocity.listener.VelocityChatListener;
 import io.github.railgun19457.astrbotadapter.platform.velocity.listener.VelocityPlayerListener;
 import org.slf4j.Logger;
 
@@ -180,10 +179,9 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
      * 注册Velocity事件监听器
      */
     private void registerVelocityListeners() {
-        // Chat listener: only handles message forwarding (AI chat is handled by backends)
-        proxy.getEventManager().register(this, 
-                new VelocityChatListener(messageForwardService));
-        
+        // Chat forwarding is handled via PMC from backend servers (handleProxyBridgeEvent),
+        // so no VelocityChatListener is needed here.
+
         // 注册玩家监听器
         proxy.getEventManager().register(this, 
                 new VelocityPlayerListener(this, proxy, notificationService));
