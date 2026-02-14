@@ -20,6 +20,8 @@ public enum ProxyMessageType {
     PLAYER_DATA_REPORT,
     /** Backend reports a chat message from a player */
     CHAT_MESSAGE_REPORT,
+    /** Backend reports an AI chat request (already processed: prefix stripped, private chat cancelled) */
+    AI_CHAT_REQUEST_REPORT,
     /** Backend reports player join event */
     PLAYER_JOIN_REPORT,
     /** Backend reports player quit event */
@@ -30,6 +32,8 @@ public enum ProxyMessageType {
     LOG_REPORT,
 
     // ===== Commands (Proxy → Backend) =====
+    /** Proxy sends configuration (aiChat, etc.) to backend after auth success */
+    SYNC_CONFIG,
     /** Proxy instructs backend to execute a command */
     EXECUTE_COMMAND,
     /** Proxy instructs backend to send a message to a player */

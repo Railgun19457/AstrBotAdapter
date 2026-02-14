@@ -6,7 +6,7 @@
 
     <groupId>io.github.railgun19457</groupId>
     <artifactId>astrbotadapter</artifactId>
-    <version>2.0.3-beta</version>
+    <version>2.0.4-beta</version>
     <packaging>jar</packaging>
 
     <name>AstrbotAdaptor</name>
@@ -111,7 +111,7 @@
                         <filtering>true</filtering>
                         <includes>
                             <include>plugin.yml</include>
-                            <include>config.yml</include>
+                            <include>config-backend.yml</include>
                             <include>lang/**</include>
                         </includes>
                     </resource>
@@ -157,7 +157,7 @@
                         <filtering>true</filtering>
                         <includes>
                             <include>folia-plugin.yml</include>
-                            <include>config.yml</include>
+                            <include>config-backend.yml</include>
                             <include>lang/**</include>
                         </includes>
                     </resource>
@@ -222,7 +222,7 @@
                         <filtering>true</filtering>
                         <includes>
                             <include>velocity-plugin.json</include>
-                            <include>config.yml</include>
+                            <include>config-velocity.yml</include>
                             <include>lang/**</include>
                         </includes>
                     </resource>

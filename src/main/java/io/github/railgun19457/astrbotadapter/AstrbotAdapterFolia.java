@@ -74,7 +74,7 @@ public class AstrbotAdapterFolia extends JavaPlugin {
         proxyClient.initialize();
 
         getServer().getPluginManager().registerEvents(
-                new BukkitProxyChatListener(proxyClient),
+                new BukkitProxyChatListener(proxyClient, pluginInstance.getConfigManager().getConfig()),
                 this
         );
         getServer().getPluginManager().registerEvents(

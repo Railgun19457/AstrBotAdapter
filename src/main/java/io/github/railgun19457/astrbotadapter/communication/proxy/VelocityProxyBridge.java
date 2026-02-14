@@ -20,6 +20,9 @@ import java.io.ByteArrayOutputStream;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.security.SecureRandom;
 import java.util.Collection;
 import java.util.Map;
@@ -40,11 +43,13 @@ public class VelocityProxyBridge {
     private static final String SECRET_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
     private static final int SECRET_LENGTH = 32;
     private static final long BACKEND_TIMEOUT_MS = 120_000; // 2 minutes
+    private static final String SECRET_FILE_NAME = "proxy-secret.txt";
 
     private final Object plugin;
     private final ProxyServer proxy;
     private final PluginConfig config;
     private final Logger logger;
+    private final Path dataFolder;
 
     private final ChannelIdentifier channelId;
     private String secret;
@@ -58,20 +63,22 @@ public class VelocityProxyBridge {
     // Handler for proxy-originated events (chat, join/quit, etc.)
     private Consumer<ProxyBridgeEvent> eventHandler;
 
-    public VelocityProxyBridge(Object plugin, ProxyServer proxy, PluginConfig config, Logger logger) {
+    public VelocityProxyBridge(Object plugin, ProxyServer proxy, PluginConfig config,
+                               Path dataFolder, Logger logger) {
         this.plugin = plugin;
         this.proxy = proxy;
         this.config = config;
+        this.dataFolder = dataFolder;
         this.logger = logger;
         this.channelId = MinecraftChannelIdentifier.create(CHANNEL_NAMESPACE, CHANNEL_NAME);
     }
 
     /**
-     * Initialize the proxy bridge: generate secret, register channels.
+     * Initialize the proxy bridge: load or generate persistent secret, register channels.
      */
     public void initialize() {
-        // Generate random secret
-        this.secret = generateSecret();
+        // Load existing secret or generate a new one
+        this.secret = loadOrCreateSecret();
 
         // Register plugin messaging channel
         proxy.getChannelRegistrar().register(channelId);
@@ -79,6 +86,7 @@ public class VelocityProxyBridge {
         logger.info("========================================");
         logger.info("代理桥接模式已启用!");
         logger.info("后端服务器Secret: " + secret);
+        logger.info("Secret已保存至: " + dataFolder.resolve(SECRET_FILE_NAME));
         logger.info("请将此Secret填入后端服务器的配置文件中");
         logger.info("========================================");
 
@@ -87,6 +95,38 @@ public class VelocityProxyBridge {
                 .delay(java.time.Duration.ofSeconds(30))
                 .repeat(java.time.Duration.ofSeconds(60))
                 .schedule();
+    }
+
+    /**
+     * Load secret from file, or generate a new one and save it.
+     * The secret is persisted in the plugin data folder so it survives restarts.
+     */
+    private String loadOrCreateSecret() {
+        Path secretFile = dataFolder.resolve(SECRET_FILE_NAME);
+
+        // Try to load existing secret
+        if (Files.exists(secretFile)) {
+            try {
+                String loaded = Files.readString(secretFile, StandardCharsets.UTF_8).trim();
+                if (!loaded.isEmpty()) {
+                    logger.info("已从文件加载代理Secret");
+                    return loaded;
+                }
+            } catch (IOException e) {
+                logger.warning("读取Secret文件失败，将重新生成: " + e.getMessage());
+            }
+        }
+
+        // Generate new secret and persist
+        String newSecret = generateSecret();
+        try {
+            Files.createDirectories(dataFolder);
+            Files.writeString(secretFile, newSecret, StandardCharsets.UTF_8);
+            logger.info("已生成新的代理Secret并保存至文件");
+        } catch (IOException e) {
+            logger.severe("保存Secret文件失败: " + e.getMessage());
+        }
+        return newSecret;
     }
 
     /**
@@ -157,6 +197,7 @@ public class VelocityProxyBridge {
             case SERVER_INFO_REPORT -> handleServerInfoReport(senderServer, msg);
             case PLAYER_DATA_REPORT -> handlePlayerDataReport(senderServer, msg);
             case CHAT_MESSAGE_REPORT -> handleChatMessageReport(senderServer, msg);
+            case AI_CHAT_REQUEST_REPORT -> handleAiChatRequestReport(senderServer, msg);
             case PLAYER_JOIN_REPORT -> handlePlayerJoinReport(senderServer, msg);
             case PLAYER_QUIT_REPORT -> handlePlayerQuitReport(senderServer, msg);
             case COMMAND_RESULT_REPORT -> handleCommandResultReport(senderServer, msg);
@@ -195,6 +236,46 @@ public class VelocityProxyBridge {
         sendAuthResponse(serverConn, true, "认证成功");
         logger.info("后端服务器 " + serverName + " 已通过认证 [" +
                 (data.has("platform") ? data.get("platform").getAsString() : "Unknown") + "]");
+
+        // Sync configuration to backend after successful auth
+        sendConfigSync(serverConn);
+    }
+
+    /**
+     * Send aiChat configuration to a backend server.
+     * This ensures all AI chat settings are managed centrally on the proxy.
+     */
+    private void sendConfigSync(ServerConnection serverConn) {
+        JsonObject data = new JsonObject();
+
+        // AI Chat config
+        JsonObject aiChat = new JsonObject();
+
+        JsonObject group = new JsonObject();
+        group.addProperty("enabled", config.isGroupChatEnabled());
+        group.addProperty("prefix", config.getGroupChatPrefix());
+        aiChat.add("group", group);
+
+        JsonObject priv = new JsonObject();
+        priv.addProperty("enabled", config.isPrivateChatEnabled());
+        priv.addProperty("prefix", config.getPrivateChatPrefix());
+        priv.addProperty("echoFormat", config.getPrivateChatEchoFormat());
+        aiChat.add("private", priv);
+
+        aiChat.addProperty("responseFormat", config.getAiResponseFormat());
+        aiChat.addProperty("thinkingMessage", config.getAiThinkingMessage());
+        aiChat.addProperty("showThinking", config.isAiShowThinking());
+        aiChat.addProperty("timeout", config.getAiTimeoutSeconds());
+
+        data.add("aiChat", aiChat);
+
+        ProxyMessage msg = ProxyMessage.builder()
+                .type(ProxyMessageType.SYNC_CONFIG)
+                .data(data)
+                .build();
+
+        sendToBackend(serverConn, msg);
+        logger.info("已向后端服务器同步AI聊天配置");
     }
 
     private void sendAuthResponse(ServerConnection serverConn, boolean success, String message) {
@@ -231,10 +312,22 @@ public class VelocityProxyBridge {
         BackendServerInfo info = getAuthenticatedBackend(senderServer);
         if (info == null) return;
 
-        // Fire event so that AstrbotAdapterVelocity can handle it
+        // Fire event so that AstrbotAdapterVelocity can handle message forwarding
         if (eventHandler != null) {
             eventHandler.accept(new ProxyBridgeEvent(
                     ProxyBridgeEvent.Type.CHAT_MESSAGE, senderServer, msg.getData()));
+        }
+    }
+
+    private void handleAiChatRequestReport(String senderServer, ProxyMessage msg) {
+        BackendServerInfo info = getAuthenticatedBackend(senderServer);
+        if (info == null) return;
+
+        // Backend has processed the AI chat trigger locally (prefix stripped, private chat
+        // cancelled + echo sent). Forward to Velocity for routing to Astrbot via WS.
+        if (eventHandler != null) {
+            eventHandler.accept(new ProxyBridgeEvent(
+                    ProxyBridgeEvent.Type.AI_CHAT_REQUEST, senderServer, msg.getData()));
         }
     }
 
@@ -528,6 +621,7 @@ public class VelocityProxyBridge {
 
         public enum Type {
             CHAT_MESSAGE,
+            AI_CHAT_REQUEST,
             PLAYER_JOIN,
             PLAYER_QUIT,
             LOG_REPORT

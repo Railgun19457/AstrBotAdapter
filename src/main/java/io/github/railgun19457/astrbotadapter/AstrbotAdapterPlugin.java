@@ -8,6 +8,7 @@ import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
 import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
 import io.github.railgun19457.astrbotadapter.communication.websocket.WebSocketServer;
 import io.github.railgun19457.astrbotadapter.core.config.ConfigManager;
+import io.github.railgun19457.astrbotadapter.core.config.ConfigManager.ConfigPlatform;
 import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
 import io.github.railgun19457.astrbotadapter.core.event.EventBus;
 import io.github.railgun19457.astrbotadapter.core.i18n.I18NManager;
@@ -105,8 +106,8 @@ public abstract class AstrbotAdapterPlugin {
     private void initializeCore() {
         Path dataPath = dataFolder.toPath();
         
-        // 配置管理器
-        configManager = new ConfigManager(dataPath, logger);
+        // 配置管理器 (use platform-specific config)
+        configManager = new ConfigManager(dataPath, logger, getConfigPlatform());
         configManager.loadConfig();
 
         // 国际化管理器
@@ -127,6 +128,13 @@ public abstract class AstrbotAdapterPlugin {
      * 初始化平台适配器（子类实现）
      */
     protected abstract void initializePlatform();
+
+    /**
+     * Get the config platform type. Override in Velocity to return VELOCITY.
+     */
+    protected ConfigPlatform getConfigPlatform() {
+        return ConfigPlatform.BACKEND;
+    }
 
     /**
      * 初始化通信组件

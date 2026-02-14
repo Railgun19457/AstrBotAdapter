@@ -11,6 +11,7 @@ import com.velocitypowered.api.proxy.ProxyServer;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
 import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
 import io.github.railgun19457.astrbotadapter.communication.proxy.VelocityProxyBridge;
+import io.github.railgun19457.astrbotadapter.core.config.ConfigManager.ConfigPlatform;
 import io.github.railgun19457.astrbotadapter.platform.velocity.VelocityAdapter;
 import io.github.railgun19457.astrbotadapter.platform.velocity.listener.VelocityChatListener;
 import io.github.railgun19457.astrbotadapter.platform.velocity.listener.VelocityPlayerListener;
@@ -56,10 +57,8 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
         initialize();
         registerVelocityListeners();
 
-        // Initialize proxy bridge if enabled
-        if (configManager.getConfig().isProxyBridgeEnabled()) {
-            initializeProxyBridge();
-        }
+        // Velocity always acts as proxy bridge
+        initializeProxyBridge();
     }
 
     @Subscribe
@@ -77,11 +76,16 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
         logger.info("Velocity平台适配器已初始化");
     }
 
+    @Override
+    protected ConfigPlatform getConfigPlatform() {
+        return ConfigPlatform.VELOCITY;
+    }
+
     /**
      * Initialize the proxy bridge for aggregating backend server data.
      */
     private void initializeProxyBridge() {
-        proxyBridge = new VelocityProxyBridge(this, proxy, configManager.getConfig(), logger);
+        proxyBridge = new VelocityProxyBridge(this, proxy, configManager.getConfig(), dataDirectory, logger);
         proxyBridge.initialize();
 
         // Wire up the broadcaster so bridge can forward to Astrbot
@@ -100,6 +104,8 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
 
     /**
      * Handle events from the proxy bridge (backend server reports).
+     * Backend servers handle AI chat locally (prefix detection, private chat cancellation, echo).
+     * The proxy only forwards the resulting chat/forward requests to Astrbot.
      */
     private void handleProxyBridgeEvent(VelocityProxyBridge.ProxyBridgeEvent event) {
         JsonObject data = event.getData();
@@ -107,25 +113,35 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
 
         switch (event.getType()) {
             case CHAT_MESSAGE -> {
-                // Forward chat from backend to Astrbot as if it came from this server
+                // Backend has already handled AI chat triggers locally.
+                // We receive the raw chat message and forward it for message forwarding only.
                 String playerUuid = data.has("playerUuid") ? data.get("playerUuid").getAsString() : null;
                 String playerName = data.has("playerName") ? data.get("playerName").getAsString() : "Unknown";
                 String displayName = data.has("displayName") ? data.get("displayName").getAsString() : playerName;
                 String message = data.has("message") ? data.get("message").getAsString() : "";
 
-                if (!message.isEmpty()) {
-                    // Process through chat service
-                    if (chatService != null && chatService.shouldTriggerChat(message)) {
-                        chatService.handlePlayerChat(
-                                playerUuid != null ? UUID.fromString(playerUuid) : UUID.randomUUID(),
-                                playerName, displayName, message);
-                    }
-                    // Process through forward service
-                    if (messageForwardService != null && messageForwardService.shouldForward(message)) {
-                        messageForwardService.handlePlayerMessage(
-                                playerUuid != null ? UUID.fromString(playerUuid) : UUID.randomUUID(),
-                                playerName, displayName, message);
-                    }
+                if (!message.isEmpty() && messageForwardService != null
+                        && messageForwardService.shouldForward(message)) {
+                    messageForwardService.handlePlayerMessage(
+                            playerUuid != null ? UUID.fromString(playerUuid) : UUID.randomUUID(),
+                            playerName, displayName, message);
+                }
+            }
+            case AI_CHAT_REQUEST -> {
+                // Backend detected an AI chat trigger and sent us the processed request.
+                // Forward it to Astrbot via ChatService.
+                String playerUuid = data.has("playerUuid") ? data.get("playerUuid").getAsString() : null;
+                String playerName = data.has("playerName") ? data.get("playerName").getAsString() : "Unknown";
+                String displayName = data.has("displayName") ? data.get("displayName").getAsString() : playerName;
+                String content = data.has("content") ? data.get("content").getAsString() : "";
+                String chatMode = data.has("chatMode") ? data.get("chatMode").getAsString() : "GROUP";
+
+                if (!content.isEmpty() && chatService != null) {
+                    io.github.railgun19457.astrbotadapter.service.chat.ChatMode mode =
+                            io.github.railgun19457.astrbotadapter.service.chat.ChatMode.fromString(chatMode);
+                    chatService.sendChatRequest(
+                            playerUuid != null ? UUID.fromString(playerUuid) : UUID.randomUUID(),
+                            playerName, displayName, content, mode);
                 }
             }
             case PLAYER_JOIN -> {
@@ -164,9 +180,9 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
      * 注册Velocity事件监听器
      */
     private void registerVelocityListeners() {
-        // 注册聊天监听器
+        // Chat listener: only handles message forwarding (AI chat is handled by backends)
         proxy.getEventManager().register(this, 
-                new VelocityChatListener(chatService, messageForwardService));
+                new VelocityChatListener(messageForwardService));
         
         // 注册玩家监听器
         proxy.getEventManager().register(this, 

@@ -12,30 +12,61 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 
 /**
- * 配置管理器
- * 负责加载、保存、验证和热重载配置文件
+ * Configuration manager.
+ * Loads platform-specific default config files (config-velocity.yml / config-backend.yml)
+ * and preserves YAML comments during save.
  */
 public class ConfigManager {
 
+    /**
+     * Platform type for determining which default config to use.
+     */
+    public enum ConfigPlatform {
+        /** Bukkit/Paper/Folia backend server */
+        BACKEND,
+        /** Velocity proxy server */
+        VELOCITY
+    }
+
+    private static final String CONFIG_FILE_NAME = "config.yml";
+    private static final String DEFAULT_BACKEND_CONFIG = "config-backend.yml";
+    private static final String DEFAULT_VELOCITY_CONFIG = "config-velocity.yml";
+
     private final Path dataFolder;
     private final Logger logger;
+    private final ConfigPlatform platform;
     private PluginConfig config;
     private Map<String, Object> rawConfig;
 
-    public ConfigManager(Path dataFolder, Logger logger) {
+    /**
+     * Create a config manager for the given platform.
+     * @param dataFolder plugin data folder
+     * @param logger logger
+     * @param platform the platform type (BACKEND or VELOCITY)
+     */
+    public ConfigManager(Path dataFolder, Logger logger, ConfigPlatform platform) {
         this.dataFolder = dataFolder;
         this.logger = logger;
+        this.platform = platform;
         this.config = new PluginConfig();
     }
 
     /**
-     * 加载配置文件
-     * @return 是否加载成功
+     * Legacy constructor for backward compatibility.
+     * Defaults to BACKEND platform.
+     */
+    public ConfigManager(Path dataFolder, Logger logger) {
+        this(dataFolder, logger, ConfigPlatform.BACKEND);
+    }
+
+    /**
+     * Load the configuration file.
+     * @return true if loaded successfully
      */
     public boolean loadConfig() {
-        Path configFile = dataFolder.resolve("config.yml");
-        
-        // 如果配置文件不存在，创建默认配置
+        Path configFile = dataFolder.resolve(CONFIG_FILE_NAME);
+
+        // Create default config if it doesn't exist
         if (!Files.exists(configFile)) {
             saveDefaultConfig();
         }
@@ -43,13 +74,16 @@ public class ConfigManager {
         try {
             rawConfig = loadYaml(configFile);
             parseConfig(rawConfig);
-            
-            // 验证并修复配置
+
+            // Validate and fix
             ConfigValidator validator = new ConfigValidator(logger);
             if (!validator.validate(config)) {
                 logger.warning("配置文件存在问题，已使用默认值修复");
             }
-            
+
+            // Apply platform-specific defaults that don't need config toggles
+            applyPlatformDefaults();
+
             return true;
         } catch (Exception e) {
             logger.severe("加载配置文件失败: " + e.getMessage());
@@ -58,29 +92,59 @@ public class ConfigManager {
     }
 
     /**
-     * 重载配置
-     * @return 是否重载成功
+     * Apply platform-specific defaults.
+     * - Velocity: always acts as proxy bridge, never as proxy mode backend
+     * - Backend: never acts as proxy bridge
+     */
+    private void applyPlatformDefaults() {
+        switch (platform) {
+            case VELOCITY -> {
+                // Velocity is always the proxy bridge, never a backend in proxy mode
+                config.setProxyBridgeEnabled(true);
+                config.setProxyModeEnabled(false);
+            }
+            case BACKEND -> {
+                // Backend can never be a proxy bridge
+                config.setProxyBridgeEnabled(false);
+                // proxyModeEnabled is read from config - user decides
+            }
+        }
+    }
+
+    /**
+     * Reload configuration.
+     * @return true if reloaded successfully
      */
     public boolean reloadConfig() {
         return loadConfig();
     }
 
     /**
-     * 保存默认配置文件
+     * Save default config file from resources, preserving comments.
      */
     public void saveDefaultConfig() {
-        Path configFile = dataFolder.resolve("config.yml");
-        
+        Path configFile = dataFolder.resolve(CONFIG_FILE_NAME);
+
         try {
             Files.createDirectories(dataFolder);
-            
-            // 从资源中读取默认配置
-            try (InputStream in = getClass().getClassLoader().getResourceAsStream("config.yml")) {
+
+            // Pick the right default config based on platform
+            String resourceName = (platform == ConfigPlatform.VELOCITY)
+                    ? DEFAULT_VELOCITY_CONFIG
+                    : DEFAULT_BACKEND_CONFIG;
+
+            try (InputStream in = getClass().getClassLoader().getResourceAsStream(resourceName)) {
                 if (in != null) {
                     Files.copy(in, configFile);
                 } else {
-                    // 如果资源不存在，创建基本配置
-                    createBasicConfig(configFile);
+                    // Fallback: try the generic config.yml
+                    try (InputStream fallback = getClass().getClassLoader().getResourceAsStream(CONFIG_FILE_NAME)) {
+                        if (fallback != null) {
+                            Files.copy(fallback, configFile);
+                        } else {
+                            createBasicConfig(configFile);
+                        }
+                    }
                 }
             }
         } catch (IOException e) {
@@ -89,20 +153,79 @@ public class ConfigManager {
     }
 
     /**
-     * 保存当前配置到文件
+     * Save current configuration to file.
+     * Uses a comment-preserving approach: reads existing file, updates values in-place.
      */
     public void saveConfig() {
-        Path configFile = dataFolder.resolve("config.yml");
-        
-        try (BufferedWriter writer = Files.newBufferedWriter(configFile, StandardCharsets.UTF_8)) {
-            writeYaml(writer, buildConfigMap());
+        Path configFile = dataFolder.resolve(CONFIG_FILE_NAME);
+
+        try {
+            if (Files.exists(configFile)) {
+                // Read existing content, update values, and write back preserving comments
+                String content = Files.readString(configFile, StandardCharsets.UTF_8);
+                content = updateYamlValue(content, "auth", "token", config.getToken());
+                Files.writeString(configFile, content, StandardCharsets.UTF_8);
+            } else {
+                // No existing file - write fresh with buildConfigMap
+                try (BufferedWriter writer = Files.newBufferedWriter(configFile, StandardCharsets.UTF_8)) {
+                    writeYaml(writer, buildConfigMap());
+                }
+            }
         } catch (IOException e) {
             logger.severe("保存配置文件失败: " + e.getMessage());
         }
     }
 
     /**
-     * 更新Token并保存
+     * Update a specific YAML value in the file content while preserving comments.
+     * Handles simple "key: value" patterns under a parent section.
+     */
+    private String updateYamlValue(String content, String section, String key, String value) {
+        String[] lines = content.split("\n", -1);
+        StringBuilder result = new StringBuilder();
+        boolean inSection = false;
+
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            String trimmed = line.trim();
+
+            // Detect top-level section (no indentation, ends with colon, not a comment)
+            if (!line.startsWith(" ") && !line.startsWith("\t") && !trimmed.startsWith("#") && trimmed.endsWith(":") && !trimmed.isEmpty()) {
+                String sectionName = trimmed.substring(0, trimmed.length() - 1).trim();
+                inSection = sectionName.equals(section);
+            }
+
+            // If we're in the target section, look for the key
+            if (inSection && trimmed.startsWith(key + ":")) {
+                // Preserve indentation
+                int indent = line.indexOf(key);
+                String prefix = line.substring(0, indent);
+                String formattedValue = formatYamlValue(value);
+                result.append(prefix).append(key).append(": ").append(formattedValue);
+            } else {
+                result.append(line);
+            }
+
+            if (i < lines.length - 1) {
+                result.append("\n");
+            }
+        }
+
+        return result.toString();
+    }
+
+    /**
+     * Format a value for YAML output.
+     */
+    private String formatYamlValue(String value) {
+        if (value == null || value.isEmpty()) {
+            return "\"\"";
+        }
+        return "\"" + value.replace("\\", "\\\\").replace("\"", "\\\"") + "\"";
+    }
+
+    /**
+     * Update token and save.
      */
     public void updateToken(String newToken) {
         config.setToken(newToken);
@@ -117,53 +240,57 @@ public class ConfigManager {
     }
 
     /**
-     * 获取当前配置
+     * Get current configuration.
      */
     public PluginConfig getConfig() {
         return config;
     }
 
     /**
-     * 解析配置Map到PluginConfig对象
+     * Get the platform type.
+     */
+    public ConfigPlatform getPlatform() {
+        return platform;
+    }
+
+    /**
+     * Parse config map into PluginConfig.
      */
     private void parseConfig(Map<String, Object> yaml) {
-        // 基础设置
+        // General
         Map<String, Object> general = getMap(yaml, "general");
         if (general != null) {
             config.setLanguage(getString(general, "language", "zh_CN"));
             config.setDebug(getBoolean(general, "debug", false));
         }
 
-        // 认证设置
+        // Auth
         Map<String, Object> auth = getMap(yaml, "auth");
         if (auth != null) {
             config.setToken(getString(auth, "token", ""));
         }
 
-        // 服务器设置
+        // Server
         Map<String, Object> server = getMap(yaml, "server");
         if (server != null) {
-            // 新版统一配置：直接在server下的host和port
             String serverHost = getString(server, "host", null);
             Integer serverPort = getIntOrNull(server, "port");
-            
+
             if (serverHost != null) {
                 config.setServerHost(serverHost);
             }
             if (serverPort != null) {
                 config.setServerPort(serverPort);
             }
-            
+
             // WebSocket
             Map<String, Object> ws = getMap(server, "websocket");
             if (ws != null) {
                 config.setWsEnabled(getBoolean(ws, "enabled", true));
-                // 兼容旧配置：如果ws中有host/port，也读取
                 String wsHost = getString(ws, "host", null);
                 Integer wsPort = getIntOrNull(ws, "port");
                 if (wsHost != null) {
                     config.setWsHost(wsHost);
-                    // 如果没有新版配置，使用旧版作为统一配置
                     if (serverHost == null) {
                         config.setServerHost(wsHost);
                     }
@@ -182,7 +309,6 @@ public class ConfigManager {
             Map<String, Object> rest = getMap(server, "restapi");
             if (rest != null) {
                 config.setRestEnabled(getBoolean(rest, "enabled", true));
-                // 兼容旧配置
                 String restHost = getString(rest, "host", null);
                 Integer restPort = getIntOrNull(rest, "port");
                 if (restHost != null) {
@@ -195,27 +321,25 @@ public class ConfigManager {
             }
         }
 
-        // 消息转发
+        // Message Forward
         Map<String, Object> forward = getMap(yaml, "messageForward");
         if (forward != null) {
             config.setForwardEnabled(getBoolean(forward, "enabled", true));
             config.setForwardPrefix(getString(forward, "prefix", "*"));
             config.setStripPrefix(getBoolean(forward, "stripPrefix", true));
-            config.setIncomingFormat(getString(forward, "incomingFormat", 
-                "§7[§b{platform}§7] §f{username}§7: §f{content}"));
+            config.setIncomingFormat(getString(forward, "incomingFormat",
+                    "§7[§b{platform}§7] §f{username}§7: §f{content}"));
         }
 
-        // AI聊天
+        // AI Chat (backend only, but parse if present for compatibility)
         Map<String, Object> aiChat = getMap(yaml, "aiChat");
         if (aiChat != null) {
-            // 群聊
             Map<String, Object> group = getMap(aiChat, "group");
             if (group != null) {
                 config.setGroupChatEnabled(getBoolean(group, "enabled", true));
                 config.setGroupChatPrefix(getString(group, "prefix", "@"));
             }
 
-            // 私聊
             Map<String, Object> priv = getMap(aiChat, "private");
             if (priv != null) {
                 config.setPrivateChatEnabled(getBoolean(priv, "enabled", true));
@@ -223,9 +347,13 @@ public class ConfigManager {
                 config.setPrivateChatEchoFormat(getString(priv, "echoFormat", "<{player}> {message}"));
             }
 
+            config.setAiResponseFormat(getString(aiChat, "responseFormat", "§7[§dAI§7] §f{content}"));
+            config.setAiThinkingMessage(getString(aiChat, "thinkingMessage", "§7[§dAI§7] §e思考中..."));
+            config.setAiShowThinking(getBoolean(aiChat, "showThinking", true));
+            config.setAiTimeoutSeconds(getInt(aiChat, "timeout", 60));
         }
 
-        // 玩家通知
+        // Player Notification
         Map<String, Object> notify = getMap(yaml, "playerNotification");
         if (notify != null) {
             Map<String, Object> join = getMap(notify, "join");
@@ -238,7 +366,7 @@ public class ConfigManager {
             }
         }
 
-        // 外部指令
+        // Command Execution
         Map<String, Object> cmd = getMap(yaml, "commandExecution");
         if (cmd != null) {
             config.setCommandEnabled(getBoolean(cmd, "enabled", true));
@@ -246,15 +374,7 @@ public class ConfigManager {
             config.setCommandFilterList(getStringList(cmd, "commandList"));
         }
 
-        // AI聊天扩展
-        if (aiChat != null) {
-            config.setAiResponseFormat(getString(aiChat, "responseFormat", "§7[§dAI§7] §f{content}"));
-            config.setAiThinkingMessage(getString(aiChat, "thinkingMessage", "§7[§dAI§7] §e思考中..."));
-            config.setAiShowThinking(getBoolean(aiChat, "showThinking", true));
-            config.setAiTimeoutSeconds(getInt(aiChat, "timeout", 60));
-        }
-
-        // 日志查询
+        // Log Query
         Map<String, Object> logQuery = getMap(yaml, "logQuery");
         if (logQuery != null) {
             config.setLogQueryEnabled(getBoolean(logQuery, "enabled", true));
@@ -262,29 +382,29 @@ public class ConfigManager {
             config.setLogQueryFile(getString(logQuery, "logFile", ""));
         }
 
-        // 更新检查
+        // Update Check (backend only)
         Map<String, Object> update = getMap(yaml, "updateCheck");
         if (update != null) {
             config.setUpdateCheckEnabled(getBoolean(update, "enabled", true));
             config.setUpdateNotifyOps(getBoolean(update, "notifyOps", true));
         }
 
-        // 代理模式
+        // Proxy Mode (backend only - the enabled toggle matters)
         Map<String, Object> proxyMode = getMap(yaml, "proxyMode");
         if (proxyMode != null) {
             config.setProxyModeEnabled(getBoolean(proxyMode, "enabled", false));
             config.setProxySecret(getString(proxyMode, "secret", ""));
         }
 
-        // 代理桥接 (Velocity端)
+        // Proxy Bridge (legacy compat - now derived from platform in applyPlatformDefaults)
         Map<String, Object> proxyBridge = getMap(yaml, "proxyBridge");
         if (proxyBridge != null) {
             config.setProxyBridgeEnabled(getBoolean(proxyBridge, "enabled", false));
         }
     }
 
-    // ===== YAML 解析器 =====
-    
+    // ===== YAML Tools =====
+
     @SuppressWarnings("unchecked")
     private Map<String, Object> loadYaml(Path file) throws IOException {
         Yaml yaml = new Yaml();
@@ -308,102 +428,31 @@ public class ConfigManager {
 
     private Map<String, Object> buildConfigMap() {
         java.util.LinkedHashMap<String, Object> root = new java.util.LinkedHashMap<>();
-        
-        // general
+
         java.util.LinkedHashMap<String, Object> general = new java.util.LinkedHashMap<>();
         general.put("language", config.getLanguage());
         general.put("debug", config.isDebug());
         root.put("general", general);
-        
-        // auth
+
         java.util.LinkedHashMap<String, Object> auth = new java.util.LinkedHashMap<>();
         auth.put("token", config.getToken());
         root.put("auth", auth);
-        
-        // server - 新版统一配置结构
+
         java.util.LinkedHashMap<String, Object> server = new java.util.LinkedHashMap<>();
         server.put("host", config.getServerHost());
         server.put("port", config.getServerPort());
-        
+
         java.util.LinkedHashMap<String, Object> ws = new java.util.LinkedHashMap<>();
         ws.put("enabled", config.isWsEnabled());
         ws.put("heartbeatInterval", config.getHeartbeatInterval());
         ws.put("heartbeatTimeout", config.getHeartbeatTimeout());
         server.put("websocket", ws);
-        
+
         java.util.LinkedHashMap<String, Object> rest = new java.util.LinkedHashMap<>();
         rest.put("enabled", config.isRestEnabled());
         rest.put("rateLimit", config.getRateLimit());
         server.put("restapi", rest);
         root.put("server", server);
-
-        // messageForward
-        java.util.LinkedHashMap<String, Object> forward = new java.util.LinkedHashMap<>();
-        forward.put("enabled", config.isForwardEnabled());
-        forward.put("prefix", config.getForwardPrefix());
-        forward.put("stripPrefix", config.isStripPrefix());
-        forward.put("incomingFormat", config.getIncomingFormat());
-        root.put("messageForward", forward);
-
-        // aiChat
-        java.util.LinkedHashMap<String, Object> aiChat = new java.util.LinkedHashMap<>();
-        java.util.LinkedHashMap<String, Object> group = new java.util.LinkedHashMap<>();
-        group.put("enabled", config.isGroupChatEnabled());
-        group.put("prefix", config.getGroupChatPrefix());
-        aiChat.put("group", group);
-
-        java.util.LinkedHashMap<String, Object> priv = new java.util.LinkedHashMap<>();
-        priv.put("enabled", config.isPrivateChatEnabled());
-        priv.put("prefix", config.getPrivateChatPrefix());
-        priv.put("echoFormat", config.getPrivateChatEchoFormat());
-        aiChat.put("private", priv);
-
-        aiChat.put("responseFormat", config.getAiResponseFormat());
-        aiChat.put("thinkingMessage", config.getAiThinkingMessage());
-        aiChat.put("showThinking", config.isAiShowThinking());
-        aiChat.put("timeout", config.getAiTimeoutSeconds());
-        root.put("aiChat", aiChat);
-
-        // playerNotification
-        java.util.LinkedHashMap<String, Object> notify = new java.util.LinkedHashMap<>();
-        java.util.LinkedHashMap<String, Object> join = new java.util.LinkedHashMap<>();
-        join.put("enabled", config.isJoinNotifyEnabled());
-        notify.put("join", join);
-        java.util.LinkedHashMap<String, Object> quit = new java.util.LinkedHashMap<>();
-        quit.put("enabled", config.isQuitNotifyEnabled());
-        notify.put("quit", quit);
-        root.put("playerNotification", notify);
-
-        // commandExecution
-        java.util.LinkedHashMap<String, Object> commandExecution = new java.util.LinkedHashMap<>();
-        commandExecution.put("enabled", config.isCommandEnabled());
-        commandExecution.put("filterType", config.getCommandFilterMode());
-        commandExecution.put("commandList", config.getCommandFilterList());
-        root.put("commandExecution", commandExecution);
-
-        // logQuery
-        java.util.LinkedHashMap<String, Object> logQuery = new java.util.LinkedHashMap<>();
-        logQuery.put("enabled", config.isLogQueryEnabled());
-        logQuery.put("maxLines", config.getLogQueryMaxLines());
-        logQuery.put("logFile", config.getLogQueryFile());
-        root.put("logQuery", logQuery);
-
-        // updateCheck
-        java.util.LinkedHashMap<String, Object> updateCheck = new java.util.LinkedHashMap<>();
-        updateCheck.put("enabled", config.isUpdateCheckEnabled());
-        updateCheck.put("notifyOps", config.isUpdateNotifyOps());
-        root.put("updateCheck", updateCheck);
-
-        // proxyMode (backend)
-        java.util.LinkedHashMap<String, Object> proxyModeMap = new java.util.LinkedHashMap<>();
-        proxyModeMap.put("enabled", config.isProxyModeEnabled());
-        proxyModeMap.put("secret", config.getProxySecret());
-        root.put("proxyMode", proxyModeMap);
-
-        // proxyBridge (Velocity)
-        java.util.LinkedHashMap<String, Object> proxyBridgeMap = new java.util.LinkedHashMap<>();
-        proxyBridgeMap.put("enabled", config.isProxyBridgeEnabled());
-        root.put("proxyBridge", proxyBridgeMap);
 
         return root;
     }
@@ -414,7 +463,7 @@ public class ConfigManager {
         }
     }
 
-    // ===== 工具方法 =====
+    // ===== Utility Methods =====
 
     @SuppressWarnings("unchecked")
     private Map<String, Object> getMap(Map<String, Object> map, String key) {

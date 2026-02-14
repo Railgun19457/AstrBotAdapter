@@ -61,7 +61,7 @@ public class BukkitProxyClient implements PluginMessageListener {
         logger.info("代理模式已启用，Plugin Messaging Channel已注册: " + ProxyChannel.CHANNEL_ID);
 
         // Schedule periodic server info reporting
-        Bukkit.getScheduler().runTaskTimerAsynchronously(plugin, this::reportServerInfo, 100L, 600L); // 30s interval
+        platformAdapter.getScheduler().runTimerAsync(this::reportServerInfo, 100L, 600L); // 30s interval
     }
 
     /**
@@ -206,6 +206,37 @@ public class BukkitProxyClient implements PluginMessageListener {
     }
 
     /**
+     * Report an AI chat request to the proxy.
+     * The backend has already handled the local side (private chat cancellation + echo).
+     * The proxy will forward this to Astrbot for an AI response.
+     *
+     * @param playerUuid player UUID
+     * @param playerName player name
+     * @param displayName player display name
+     * @param content the stripped message content (prefix already removed)
+     * @param chatMode "GROUP" or "PRIVATE"
+     */
+    public void reportAiChatRequest(UUID playerUuid, String playerName, String displayName,
+                                     String content, String chatMode) {
+        if (!authenticated) return;
+
+        JsonObject data = new JsonObject();
+        data.addProperty("playerUuid", playerUuid.toString());
+        data.addProperty("playerName", playerName);
+        data.addProperty("displayName", displayName);
+        data.addProperty("content", content);
+        data.addProperty("chatMode", chatMode);
+
+        ProxyMessage msg = ProxyMessage.builder()
+                .type(ProxyMessageType.AI_CHAT_REQUEST_REPORT)
+                .serverName(platformAdapter.getServerName())
+                .data(data)
+                .build();
+
+        sendMessage(msg);
+    }
+
+    /**
      * Report player join event to the proxy.
      */
     public void reportPlayerJoin(UUID playerUuid, String playerName, String displayName) {
@@ -307,6 +338,7 @@ public class BukkitProxyClient implements PluginMessageListener {
     private void handleIncomingMessage(ProxyMessage msg) {
         switch (msg.getType()) {
             case AUTH_RESPONSE -> handleAuthResponse(msg);
+            case SYNC_CONFIG -> handleSyncConfig(msg);
             case EXECUTE_COMMAND -> handleExecuteCommand(msg);
             case SEND_MESSAGE -> handleSendMessage(msg);
             case BROADCAST_MESSAGE -> handleBroadcastMessage(msg);
@@ -340,6 +372,42 @@ public class BukkitProxyClient implements PluginMessageListener {
         }
     }
 
+    /**
+     * Handle config sync from proxy.
+     * Updates the local PluginConfig with aiChat settings from the Velocity proxy.
+     */
+    private void handleSyncConfig(ProxyMessage msg) {
+        JsonObject data = msg.getData();
+        if (data == null) return;
+
+        JsonObject aiChat = data.has("aiChat") && data.get("aiChat").isJsonObject()
+                ? data.getAsJsonObject("aiChat") : null;
+        if (aiChat == null) return;
+
+        // Group chat
+        if (aiChat.has("group") && aiChat.get("group").isJsonObject()) {
+            JsonObject group = aiChat.getAsJsonObject("group");
+            if (group.has("enabled")) config.setGroupChatEnabled(group.get("enabled").getAsBoolean());
+            if (group.has("prefix")) config.setGroupChatPrefix(group.get("prefix").getAsString());
+        }
+
+        // Private chat
+        if (aiChat.has("private") && aiChat.get("private").isJsonObject()) {
+            JsonObject priv = aiChat.getAsJsonObject("private");
+            if (priv.has("enabled")) config.setPrivateChatEnabled(priv.get("enabled").getAsBoolean());
+            if (priv.has("prefix")) config.setPrivateChatPrefix(priv.get("prefix").getAsString());
+            if (priv.has("echoFormat")) config.setPrivateChatEchoFormat(priv.get("echoFormat").getAsString());
+        }
+
+        // Other AI chat settings
+        if (aiChat.has("responseFormat")) config.setAiResponseFormat(aiChat.get("responseFormat").getAsString());
+        if (aiChat.has("thinkingMessage")) config.setAiThinkingMessage(aiChat.get("thinkingMessage").getAsString());
+        if (aiChat.has("showThinking")) config.setAiShowThinking(aiChat.get("showThinking").getAsBoolean());
+        if (aiChat.has("timeout")) config.setAiTimeoutSeconds(aiChat.get("timeout").getAsInt());
+
+        logger.info("已从代理端同步AI聊天配置");
+    }
+
     private void handleExecuteCommand(ProxyMessage msg) {
         JsonObject data = msg.getData();
         if (data == null) return;
@@ -350,23 +418,32 @@ public class BukkitProxyClient implements PluginMessageListener {
 
         if (command == null || command.isEmpty()) return;
 
-        // Execute on main thread
-        Bukkit.getScheduler().runTask(plugin, () -> {
+        // Execute via platform scheduler for cross-platform compatibility (Bukkit/Folia)
+        platformAdapter.getScheduler().runSync(() -> {
             long startTime = System.currentTimeMillis();
             boolean success;
 
             try {
                 if ("PLAYER".equalsIgnoreCase(executor) && playerUuid != null) {
-                    Player player = Bukkit.getPlayer(UUID.fromString(playerUuid));
-                    if (player != null) {
-                        success = Bukkit.dispatchCommand(player, command);
+                    UUID uuid;
+                    try {
+                        uuid = UUID.fromString(playerUuid);
+                    } catch (IllegalArgumentException e) {
+                        reportCommandResult(msg.getId(), false, command,
+                                "Invalid player UUID: " + playerUuid, 0, null);
+                        return;
+                    }
+
+                    var playerOpt = platformAdapter.getPlayer(uuid);
+                    if (playerOpt.isPresent()) {
+                        success = platformAdapter.executeCommand(playerOpt.get(), command);
                     } else {
                         reportCommandResult(msg.getId(), false, command,
                                 "Player not online: " + playerUuid, 0, null);
                         return;
                     }
                 } else {
-                    success = Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command);
+                    success = platformAdapter.executeCommand(command);
                 }
             } catch (Exception e) {
                 reportCommandResult(msg.getId(), false, command,

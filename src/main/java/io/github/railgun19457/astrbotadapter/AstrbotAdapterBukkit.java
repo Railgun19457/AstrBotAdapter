@@ -62,7 +62,7 @@ public class AstrbotAdapterBukkit extends JavaPlugin {
 
         // Register proxy-mode listeners that report events to the proxy
         getServer().getPluginManager().registerEvents(
-                new BukkitProxyChatListener(proxyClient),
+                new BukkitProxyChatListener(proxyClient, plugin.getConfigManager().getConfig()),
                 this
         );
         getServer().getPluginManager().registerEvents(
