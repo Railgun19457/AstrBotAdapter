@@ -2,9 +2,12 @@ package io.github.railgun19457.astrbotadapter;
 
 import io.github.railgun19457.astrbotadapter.command.AstrbotCommand;
 import io.github.railgun19457.astrbotadapter.command.AstrbotTabCompleter;
+import io.github.railgun19457.astrbotadapter.communication.proxy.BukkitProxyClient;
 import io.github.railgun19457.astrbotadapter.platform.folia.FoliaAdapter;
 import io.github.railgun19457.astrbotadapter.platform.bukkit.listener.BukkitChatListener;
 import io.github.railgun19457.astrbotadapter.platform.bukkit.listener.BukkitPlayerListener;
+import io.github.railgun19457.astrbotadapter.platform.bukkit.listener.BukkitProxyChatListener;
+import io.github.railgun19457.astrbotadapter.platform.bukkit.listener.BukkitProxyPlayerListener;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -14,6 +17,7 @@ import org.bukkit.plugin.java.JavaPlugin;
 public class AstrbotAdapterFolia extends JavaPlugin {
 
     private AstrbotAdapterPlugin pluginInstance;
+    private BukkitProxyClient proxyClient;
 
     @Override
     public void onEnable() {
@@ -28,25 +32,57 @@ public class AstrbotAdapterFolia extends JavaPlugin {
         getCommand("astrbot").setExecutor(command);
         getCommand("astrbot").setTabCompleter(tabCompleter);
 
-        // 注册监听器
-        getServer().getPluginManager().registerEvents(
-                new BukkitChatListener(pluginInstance.getChatService(), pluginInstance.getMessageForwardService()),
-                this
-        );
-        getServer().getPluginManager().registerEvents(
-            new BukkitPlayerListener(this, pluginInstance.getNotificationService()),
-                this
-        );
+        // Check if proxy mode is enabled
+        if (pluginInstance.getConfigManager().getConfig().isProxyModeEnabled()) {
+            initializeProxyMode();
+        } else {
+            // Register normal listeners
+            getServer().getPluginManager().registerEvents(
+                    new BukkitChatListener(pluginInstance.getChatService(), pluginInstance.getMessageForwardService()),
+                    this
+            );
+            getServer().getPluginManager().registerEvents(
+                new BukkitPlayerListener(this, pluginInstance.getNotificationService()),
+                    this
+            );
+        }
 
         getLogger().info("AstrbotAdapter (Folia) 已启用");
     }
 
     @Override
     public void onDisable() {
+        if (proxyClient != null) {
+            proxyClient.shutdown();
+        }
         if (pluginInstance != null) {
             pluginInstance.shutdown();
         }
         getLogger().info("AstrbotAdapter (Folia) 已禁用");
+    }
+
+    /**
+     * Initialize proxy mode for Folia.
+     */
+    private void initializeProxyMode() {
+        proxyClient = new BukkitProxyClient(
+                this,
+                pluginInstance.getConfigManager().getConfig(),
+                pluginInstance.getPlatformAdapter(),
+                getLogger()
+        );
+        proxyClient.initialize();
+
+        getServer().getPluginManager().registerEvents(
+                new BukkitProxyChatListener(proxyClient),
+                this
+        );
+        getServer().getPluginManager().registerEvents(
+                new BukkitProxyPlayerListener(proxyClient),
+                this
+        );
+
+        getLogger().info("后端服务器已进入代理模式 (Folia)");
     }
 
     /**

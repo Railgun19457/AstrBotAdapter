@@ -65,6 +65,13 @@ public class PluginConfig {
     private int logQueryMaxLines = 1000;
     private String logQueryFile = "";
 
+    // 代理模式配置 (后端服务器)
+    private boolean proxyModeEnabled = false;  // Whether this backend works in proxy mode
+    private String proxySecret = "";           // Secret for authenticating with proxy
+
+    // 代理桥接配置 (Velocity代理端)
+    private boolean proxyBridgeEnabled = false; // Whether proxy bridge is enabled on Velocity
+
     // 更新检查
     private boolean updateCheckEnabled = true;
     private boolean updateNotifyOps = true;
@@ -365,5 +372,29 @@ public class PluginConfig {
 
     public void setUpdateNotifyOps(boolean updateNotifyOps) {
         this.updateNotifyOps = updateNotifyOps;
+    }
+
+    public boolean isProxyModeEnabled() {
+        return proxyModeEnabled;
+    }
+
+    public void setProxyModeEnabled(boolean proxyModeEnabled) {
+        this.proxyModeEnabled = proxyModeEnabled;
+    }
+
+    public String getProxySecret() {
+        return proxySecret;
+    }
+
+    public void setProxySecret(String proxySecret) {
+        this.proxySecret = proxySecret;
+    }
+
+    public boolean isProxyBridgeEnabled() {
+        return proxyBridgeEnabled;
+    }
+
+    public void setProxyBridgeEnabled(boolean proxyBridgeEnabled) {
+        this.proxyBridgeEnabled = proxyBridgeEnabled;
     }
 }

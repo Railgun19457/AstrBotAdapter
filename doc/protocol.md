@@ -802,3 +802,515 @@ ws://<host>:<port>/ws?token=<token>&version=1
 - 新增字段不会破坏兼容性
 - 废弃字段会保留至少2个版本
 - 破坏性变更将增加主版本号
+
+---
+
+## 七、代理模式内部通信协议
+
+### 7.1 概述
+
+代理模式（Proxy Mode）用于 Velocity 代理端与后端 Bukkit/Paper/Folia 服务器之间的协作通信。启用代理模式后：
+
+- **后端服务器**不再启动 WebSocket/REST API 服务器，转为通过 Plugin Messaging Channel 向代理端汇报数据
+- **Velocity 代理端**负责与 Astrbot 通信（WebSocket/REST），同时管理所有后端服务器的连接和数据聚合
+- 所有后端的聊天消息、玩家事件、服务器状态等数据统一通过代理端转发给 Astrbot
+
+**适用场景：** 群组服（BungeeCord/Velocity 代理 + 多个后端服务器）
+
+### 7.2 通信通道
+
+| 项目 | 值 |
+| --- | --- |
+| Channel ID | `astrbot:proxy` |
+| 格式 | `namespace:channel`（现代Minecraft插件消息格式） |
+| 最大消息体 | 32768 字节（32KB） |
+| 序列化 | JSON via `DataOutputStream.writeUTF()` / `DataInputStream.readUTF()` |
+| 编码 | UTF-8 |
+
+### 7.3 认证机制
+
+代理模式采用一次性 Secret 进行身份认证：
+
+1. Velocity 代理端启动时，通过 `SecureRandom` 生成 **32位随机字符串**（大小写字母 + 数字）作为 Secret
+2. Secret 在启动日志中显示，管理员将其填入后端服务器的 `config.yml` 中
+3. 后端服务器上线后，发送 `AUTH_REQUEST` 消息携带 Secret
+4. 代理端验证 Secret，返回 `AUTH_RESPONSE` 确认结果
+5. 仅通过认证的后端才能进行后续数据通信
+6. 后端每30秒发送一次 `SERVER_INFO_REPORT`，同时作为心跳；如果120秒未收到汇报，代理端自动移除该后端
+
+**认证流程图：**
+
+```
+后端 Bukkit/Paper                    Velocity 代理
+   │                                    │
+   │ ── AUTH_REQUEST ────────────────> │ (携带 secret, serverName, platform, version)
+   │                                    │ 验证 secret
+   │ <── AUTH_RESPONSE ─────────────── │ (success=true/false, message)
+   │                                    │
+   │ ── SERVER_INFO_REPORT ──────────> │ (每30秒一次，作为心跳+状态上报)
+   │                                    │
+```
+
+### 7.4 消息基础结构
+
+所有代理模式内部消息使用统一的 `ProxyMessage` 格式：
+
+```json
+{
+    "type": "MESSAGE_TYPE",
+    "id": "short-uuid",
+    "replyTo": "original-request-id",
+    "serverName": "backend-server-name",
+    "data": {},
+    "timestamp": 1706140800000
+}
+```
+
+| 字段 | 类型 | 必填 | 说明 |
+| --- | --- | --- | --- |
+| `type` | String | ✅ | 消息类型（见7.5） |
+| `id` | String | ✅ | 8位UUID，自动生成 |
+| `replyTo` | String | ❌ | 回复的原始消息ID，用于请求-响应关联 |
+| `serverName` | String | ❌ | 发送方的服务器名称 |
+| `data` | Object | ❌ | 消息负载数据 |
+| `timestamp` | Long | ✅ | Unix毫秒时间戳，自动生成 |
+
+**传输帧格式：**
+
+```
+┌───────────────────────────────────────┐
+│ DataOutputStream.writeUTF(json)       │
+│ ┌─────────────────────────────────┐   │
+│ │ 2 bytes: UTF length prefix      │   │
+│ │ N bytes: JSON string (UTF-8)    │   │
+│ └─────────────────────────────────┘   │
+└───────────────────────────────────────┘
+```
+
+### 7.5 消息类型定义
+
+#### 7.5.1 握手认证
+
+| 类型 | 方向 | 说明 |
+| --- | --- | --- |
+| `AUTH_REQUEST` | 后端 → 代理 | 携带Secret的认证请求 |
+| `AUTH_RESPONSE` | 代理 → 后端 | 认证结果响应 |
+
+#### 7.5.2 数据上报（后端 → 代理）
+
+| 类型 | 方向 | 说明 |
+| --- | --- | --- |
+| `SERVER_INFO_REPORT` | 后端 → 代理 | 服务器信息（兼心跳），每30秒 |
+| `PLAYER_DATA_REPORT` | 后端 → 代理 | 玩家详细数据 |
+| `CHAT_MESSAGE_REPORT` | 后端 → 代理 | 玩家聊天消息 |
+| `PLAYER_JOIN_REPORT` | 后端 → 代理 | 玩家加入事件 |
+| `PLAYER_QUIT_REPORT` | 后端 → 代理 | 玩家离开事件 |
+| `COMMAND_RESULT_REPORT` | 后端 → 代理 | 指令执行结果 |
+| `LOG_REPORT` | 后端 → 代理 | 日志条目上报 |
+
+#### 7.5.3 指令下发（代理 → 后端）
+
+| 类型 | 方向 | 说明 |
+| --- | --- | --- |
+| `EXECUTE_COMMAND` | 代理 → 后端 | 执行指令 |
+| `SEND_MESSAGE` | 代理 → 后端 | 向指定玩家发送消息 |
+| `BROADCAST_MESSAGE` | 代理 → 后端 | 广播消息 |
+| `REQUEST_SERVER_INFO` | 代理 → 后端 | 请求服务器信息 |
+| `REQUEST_PLAYER_DATA` | 代理 → 后端 | 请求玩家数据 |
+| `REQUEST_LOGS` | 代理 → 后端 | 请求日志条目 |
+
+### 7.6 具体消息格式
+
+#### 7.6.1 认证请求 AUTH_REQUEST
+
+**后端 → 代理：**
+```json
+{
+    "type": "AUTH_REQUEST",
+    "id": "a1b2c3d4",
+    "serverName": "survival",
+    "data": {
+        "secret": "AbCdEfGh12345678AbCdEfGh12345678",
+        "serverName": "survival",
+        "platform": "Paper",
+        "version": "1.21.1"
+    },
+    "timestamp": 1706140800000
+}
+```
+
+#### 7.6.2 认证响应 AUTH_RESPONSE
+
+**代理 → 后端：**
+```json
+{
+    "type": "AUTH_RESPONSE",
+    "id": "e5f6g7h8",
+    "data": {
+        "success": true,
+        "message": "认证成功"
+    },
+    "timestamp": 1706140800000
+}
+```
+
+认证失败时：
+```json
+{
+    "type": "AUTH_RESPONSE",
+    "id": "e5f6g7h8",
+    "data": {
+        "success": false,
+        "message": "Invalid secret"
+    },
+    "timestamp": 1706140800000
+}
+```
+
+#### 7.6.3 服务器信息上报 SERVER_INFO_REPORT
+
+**后端 → 代理（每30秒）：**
+```json
+{
+    "type": "SERVER_INFO_REPORT",
+    "id": "i9j0k1l2",
+    "serverName": "survival",
+    "data": {
+        "name": "survival",
+        "platform": "Paper",
+        "version": "1.21.1",
+        "motd": "A Minecraft Server",
+        "onlineCount": 15,
+        "maxPlayers": 100,
+        "uptime": 3600000,
+        "tps": {
+            "tps1m": 19.98,
+            "tps5m": 19.95,
+            "tps15m": 19.90
+        },
+        "memory": {
+            "used": 1024,
+            "max": 4096,
+            "free": 3072
+        }
+    },
+    "timestamp": 1706140800000
+}
+```
+
+#### 7.6.4 玩家数据上报 PLAYER_DATA_REPORT
+
+**后端 → 代理：**
+```json
+{
+    "type": "PLAYER_DATA_REPORT",
+    "id": "m3n4o5p6",
+    "serverName": "survival",
+    "data": {
+        "uuid": "550e8400-e29b-41d4-a716-446655440000",
+        "name": "Steve",
+        "displayName": "§6Steve",
+        "health": 20.0,
+        "maxHealth": 20.0,
+        "level": 30,
+        "gameMode": "SURVIVAL",
+        "world": "world",
+        "ping": 45,
+        "isOnline": true,
+        "location": {
+            "x": 100.5,
+            "y": 64.0,
+            "z": -200.3
+        }
+    },
+    "timestamp": 1706140800000
+}
+```
+
+#### 7.6.5 聊天消息上报 CHAT_MESSAGE_REPORT
+
+**后端 → 代理：**
+```json
+{
+    "type": "CHAT_MESSAGE_REPORT",
+    "id": "q7r8s9t0",
+    "serverName": "survival",
+    "data": {
+        "playerUuid": "550e8400-e29b-41d4-a716-446655440000",
+        "playerName": "Steve",
+        "displayName": "§6Steve",
+        "message": "你好，AI！"
+    },
+    "timestamp": 1706140800000
+}
+```
+
+> 代理端收到后，会将消息转换为标准的 `CHAT_REQUEST` WebSocket消息转发给 Astrbot。
+
+#### 7.6.6 玩家加入上报 PLAYER_JOIN_REPORT
+
+**后端 → 代理：**
+```json
+{
+    "type": "PLAYER_JOIN_REPORT",
+    "id": "u1v2w3x4",
+    "serverName": "survival",
+    "data": {
+        "playerUuid": "550e8400-e29b-41d4-a716-446655440000",
+        "playerName": "Steve",
+        "displayName": "§6Steve",
+        "onlineCount": 16,
+        "maxPlayers": 100
+    },
+    "timestamp": 1706140800000
+}
+```
+
+#### 7.6.7 玩家离开上报 PLAYER_QUIT_REPORT
+
+**后端 → 代理：**
+```json
+{
+    "type": "PLAYER_QUIT_REPORT",
+    "id": "y5z6a7b8",
+    "serverName": "survival",
+    "data": {
+        "playerUuid": "550e8400-e29b-41d4-a716-446655440000",
+        "playerName": "Steve",
+        "displayName": "§6Steve",
+        "reason": "Disconnected",
+        "onlineCount": 15,
+        "maxPlayers": 100
+    },
+    "timestamp": 1706140800000
+}
+```
+
+#### 7.6.8 指令执行结果上报 COMMAND_RESULT_REPORT
+
+**后端 → 代理：**
+```json
+{
+    "type": "COMMAND_RESULT_REPORT",
+    "id": "c9d0e1f2",
+    "replyTo": "original-command-id",
+    "serverName": "survival",
+    "data": {
+        "success": true,
+        "command": "say Hello",
+        "output": "Command executed",
+        "executionTime": 5,
+        "logs": ["[Server] Hello"]
+    },
+    "timestamp": 1706140800000
+}
+```
+
+> 代理端收到后，会将结果转换为标准的 `COMMAND_RESPONSE` WebSocket消息转发给 Astrbot，并附加 `serverName` 字段。
+
+#### 7.6.9 日志上报 LOG_REPORT
+
+**后端 → 代理：**
+```json
+{
+    "type": "LOG_REPORT",
+    "id": "g3h4i5j6",
+    "replyTo": "original-request-id",
+    "serverName": "survival",
+    "data": {
+        "logs": ["[INFO] Server started", "[INFO] Player Steve joined"],
+        "total": 2
+    },
+    "timestamp": 1706140800000
+}
+```
+
+#### 7.6.10 执行指令 EXECUTE_COMMAND
+
+**代理 → 后端：**
+```json
+{
+    "type": "EXECUTE_COMMAND",
+    "id": "k7l8m9n0",
+    "data": {
+        "command": "say Hello from Astrbot",
+        "executor": "CONSOLE",
+        "playerUuid": null
+    },
+    "timestamp": 1706140800000
+}
+```
+
+| 字段 | 说明 |
+| --- | --- |
+| `command` | 要执行的指令（不含前缀 `/`） |
+| `executor` | 执行者类型：`CONSOLE`（控制台）或 `PLAYER`（玩家） |
+| `playerUuid` | 当 `executor` 为 `PLAYER` 时，指定执行者的UUID |
+
+#### 7.6.11 发送消息 SEND_MESSAGE
+
+**代理 → 后端：**
+```json
+{
+    "type": "SEND_MESSAGE",
+    "id": "o1p2q3r4",
+    "data": {
+        "playerUuid": "550e8400-e29b-41d4-a716-446655440000",
+        "playerName": "Steve",
+        "message": "来自AI的回复"
+    },
+    "timestamp": 1706140800000
+}
+```
+
+> 后端优先通过 `playerUuid` 查找玩家，未找到则通过 `playerName` 查找。
+
+#### 7.6.12 广播消息 BROADCAST_MESSAGE
+
+**代理 → 后端（发送给所有已认证后端）：**
+```json
+{
+    "type": "BROADCAST_MESSAGE",
+    "id": "s5t6u7v8",
+    "data": {
+        "message": "全服广播消息"
+    },
+    "timestamp": 1706140800000
+}
+```
+
+#### 7.6.13 请求服务器信息 REQUEST_SERVER_INFO
+
+**代理 → 后端：**
+```json
+{
+    "type": "REQUEST_SERVER_INFO",
+    "id": "w9x0y1z2",
+    "timestamp": 1706140800000
+}
+```
+
+> 后端收到后立即回复一个 `SERVER_INFO_REPORT`。
+
+#### 7.6.14 请求玩家数据 REQUEST_PLAYER_DATA
+
+**代理 → 后端：**
+```json
+{
+    "type": "REQUEST_PLAYER_DATA",
+    "id": "a3b4c5d6",
+    "data": {
+        "playerUuid": "550e8400-e29b-41d4-a716-446655440000"
+    },
+    "timestamp": 1706140800000
+}
+```
+
+> 若 `playerUuid` 为空，后端将上报所有在线玩家数据。
+
+#### 7.6.15 请求日志 REQUEST_LOGS
+
+**代理 → 后端：**
+```json
+{
+    "type": "REQUEST_LOGS",
+    "id": "e7f8g9h0",
+    "data": {
+        "lines": 100
+    },
+    "timestamp": 1706140800000
+}
+```
+
+> 后端收到后回复 `LOG_REPORT`，`lines` 指定请求的日志行数。
+
+### 7.7 数据流向
+
+#### 7.7.1 聊天消息流（玩家 → AI → 玩家）
+
+```
+玩家聊天 (后端)                后端插件              Velocity代理          Astrbot
+    │                          │                    │                    │
+    │ ── AsyncPlayerChatEvent →│                    │                    │
+    │                          │ ── CHAT_MESSAGE_   │                    │
+    │                          │    REPORT ────────>│                    │
+    │                          │                    │ ── CHAT_REQUEST    │
+    │                          │                    │    (WebSocket) ──>│
+    │                          │                    │                    │ AI处理
+    │                          │                    │ <── CHAT_RESPONSE  │
+    │                          │                    │    (WebSocket) ───│
+    │                          │ <── SEND_MESSAGE ──│                    │
+    │ <── player.sendMessage ──│                    │                    │
+```
+
+#### 7.7.2 指令执行流（Astrbot → 后端）
+
+```
+Astrbot                       Velocity代理          后端插件              后端服务器
+    │                          │                    │                    │
+    │ ── COMMAND_REQUEST ────>│                    │                    │
+    │    (含 targetServer)     │                    │                    │
+    │                          │ ── EXECUTE_COMMAND │                    │
+    │                          │    ──────────────>│                    │
+    │                          │                    │ ── dispatchCommand │
+    │                          │                    │    ──────────────>│
+    │                          │                    │ <── result ────── │
+    │                          │ <── COMMAND_RESULT │                    │
+    │                          │    _REPORT ────── │                    │
+    │ <── COMMAND_RESPONSE ── │                    │                    │
+    │    (WebSocket)           │                    │                    │
+```
+
+#### 7.7.3 玩家事件流（后端 → Astrbot）
+
+```
+玩家加入/离开 (后端)           后端插件              Velocity代理          Astrbot
+    │                          │                    │                    │
+    │ ── PlayerJoinEvent ────>│                    │                    │
+    │                          │ ── PLAYER_JOIN_    │                    │
+    │                          │    REPORT ────────>│                    │
+    │                          │                    │ ── PLAYER_JOIN     │
+    │                          │                    │    (WebSocket) ──>│
+```
+
+### 7.8 配置说明
+
+#### 7.8.1 后端服务器（Bukkit/Paper/Folia）config.yml
+
+```yaml
+# 代理模式（后端服务器配置）
+# 启用后，后端不再启动WS/REST API服务器
+# 转为通过Plugin Messaging Channel与Velocity代理通信
+proxyMode:
+  # 是否启用代理模式
+  enabled: true
+  # Velocity代理端生成的Secret（从代理端启动日志中获取）
+  secret: "AbCdEfGh12345678AbCdEfGh12345678"
+```
+
+#### 7.8.2 Velocity 代理端 config.yml
+
+```yaml
+# 代理桥接模式（Velocity端配置）
+# 启用后，Velocity代理端将接受后端服务器的Plugin Messaging连接
+# 并将聚合数据转发给Astrbot
+proxyBridge:
+  # 是否启用代理桥接模式
+  enabled: true
+```
+
+> **注意：** Velocity 端启用 `proxyBridge` 后仍需正常配置 `connection` 段（host、port、token）以连接 Astrbot。
+
+### 7.9 安全注意事项
+
+1. **Secret 仅在启动时生成**，每次重启 Velocity 代理端都会生成新的 Secret，需重新配置后端
+2. **仅通过认证的后端**才能发送/接收数据消息，未认证的消息将被丢弃并记录警告
+3. Plugin Messaging Channel 的通信限定在 Velocity 代理与其连接的后端服务器之间，不暴露到外部网络
+4. **后端超时清理**：后端超过120秒未发送 `SERVER_INFO_REPORT` 将被自动移除，需重新认证
+5. **消息大小限制**：单条消息不超过 32KB，超出将被丢弃
+
+### 7.10 限制与注意事项
+
+1. **Plugin Messaging 依赖在线玩家**：Plugin Messaging Channel 需要至少一个在线玩家才能发送消息。当后端服务器无玩家在线时，消息将无法发送
+2. **后端服务器名称**：后端服务器名称取自 `PlatformAdapter.getServerName()`，需要与 Velocity 的 `velocity.toml` 中注册的服务器名称一致
+3. **Astrbot 指令路由**：当 Astrbot 发送的 `COMMAND_REQUEST` 包含 `targetServer` 字段时，代理端将指令路由到指定后端执行；若未指定或目标不存在，则在代理端本地执行

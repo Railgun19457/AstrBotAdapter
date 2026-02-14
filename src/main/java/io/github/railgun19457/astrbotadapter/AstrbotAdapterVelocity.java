@@ -1,5 +1,6 @@
 package io.github.railgun19457.astrbotadapter;
 
+import com.google.gson.JsonObject;
 import com.google.inject.Inject;
 import com.velocitypowered.api.event.Subscribe;
 import com.velocitypowered.api.event.proxy.ProxyInitializeEvent;
@@ -7,6 +8,9 @@ import com.velocitypowered.api.event.proxy.ProxyShutdownEvent;
 import com.velocitypowered.api.plugin.Plugin;
 import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
+import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
+import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
+import io.github.railgun19457.astrbotadapter.communication.proxy.VelocityProxyBridge;
 import io.github.railgun19457.astrbotadapter.platform.velocity.VelocityAdapter;
 import io.github.railgun19457.astrbotadapter.platform.velocity.listener.VelocityChatListener;
 import io.github.railgun19457.astrbotadapter.platform.velocity.listener.VelocityPlayerListener;
@@ -14,6 +18,7 @@ import org.slf4j.Logger;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.util.UUID;
 
 /**
  * AstrbotAdapter Velocity插件入口
@@ -30,6 +35,7 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
     private final ProxyServer proxy;
     private final Logger velocityLogger;
     private final Path dataDirectory;
+    private VelocityProxyBridge proxyBridge;
 
     @Inject
     public AstrbotAdapterVelocity(ProxyServer proxy, Logger logger, @DataDirectory Path dataDirectory) {
@@ -49,10 +55,18 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
     public void onProxyInitialize(ProxyInitializeEvent event) {
         initialize();
         registerVelocityListeners();
+
+        // Initialize proxy bridge if enabled
+        if (configManager.getConfig().isProxyBridgeEnabled()) {
+            initializeProxyBridge();
+        }
     }
 
     @Subscribe
     public void onProxyShutdown(ProxyShutdownEvent event) {
+        if (proxyBridge != null) {
+            proxyBridge.shutdown();
+        }
         shutdown();
     }
 
@@ -61,6 +75,89 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
         platformAdapter = new VelocityAdapter(this, proxy, velocityLogger);
         platformAdapter.initialize();
         logger.info("Velocity平台适配器已初始化");
+    }
+
+    /**
+     * Initialize the proxy bridge for aggregating backend server data.
+     */
+    private void initializeProxyBridge() {
+        proxyBridge = new VelocityProxyBridge(this, proxy, configManager.getConfig(), logger);
+        proxyBridge.initialize();
+
+        // Wire up the broadcaster so bridge can forward to Astrbot
+        if (unifiedServer != null) {
+            proxyBridge.setBroadcaster(unifiedServer);
+        }
+
+        // Set up event handler for backend events
+        proxyBridge.setEventHandler(this::handleProxyBridgeEvent);
+
+        // Register the bridge as a Velocity event listener
+        proxy.getEventManager().register(this, proxyBridge);
+
+        logger.info("代理桥接已初始化，等待后端服务器连接...");
+    }
+
+    /**
+     * Handle events from the proxy bridge (backend server reports).
+     */
+    private void handleProxyBridgeEvent(VelocityProxyBridge.ProxyBridgeEvent event) {
+        JsonObject data = event.getData();
+        if (data == null) return;
+
+        switch (event.getType()) {
+            case CHAT_MESSAGE -> {
+                // Forward chat from backend to Astrbot as if it came from this server
+                String playerUuid = data.has("playerUuid") ? data.get("playerUuid").getAsString() : null;
+                String playerName = data.has("playerName") ? data.get("playerName").getAsString() : "Unknown";
+                String displayName = data.has("displayName") ? data.get("displayName").getAsString() : playerName;
+                String message = data.has("message") ? data.get("message").getAsString() : "";
+
+                if (!message.isEmpty()) {
+                    // Process through chat service
+                    if (chatService != null && chatService.shouldTriggerChat(message)) {
+                        chatService.handlePlayerChat(
+                                playerUuid != null ? UUID.fromString(playerUuid) : UUID.randomUUID(),
+                                playerName, displayName, message);
+                    }
+                    // Process through forward service
+                    if (messageForwardService != null && messageForwardService.shouldForward(message)) {
+                        messageForwardService.handlePlayerMessage(
+                                playerUuid != null ? UUID.fromString(playerUuid) : UUID.randomUUID(),
+                                playerName, displayName, message);
+                    }
+                }
+            }
+            case PLAYER_JOIN -> {
+                if (notificationService != null) {
+                    String playerUuid = data.has("playerUuid") ? data.get("playerUuid").getAsString() : null;
+                    String playerName = data.has("playerName") ? data.get("playerName").getAsString() : "Unknown";
+                    String displayName = data.has("displayName") ? data.get("displayName").getAsString() : playerName;
+
+                    if (playerUuid != null) {
+                        notificationService.notifyPlayerJoin(
+                                UUID.fromString(playerUuid), playerName, displayName);
+                    }
+                }
+            }
+            case PLAYER_QUIT -> {
+                if (notificationService != null) {
+                    String playerUuid = data.has("playerUuid") ? data.get("playerUuid").getAsString() : null;
+                    String playerName = data.has("playerName") ? data.get("playerName").getAsString() : "Unknown";
+                    String displayName = data.has("displayName") ? data.get("displayName").getAsString() : playerName;
+                    String reason = data.has("reason") ? data.get("reason").getAsString() : "QUIT";
+
+                    if (playerUuid != null) {
+                        notificationService.notifyPlayerQuit(
+                                UUID.fromString(playerUuid), playerName, displayName, reason);
+                    }
+                }
+            }
+            case LOG_REPORT -> {
+                // Log reports can be cached or forwarded as needed
+                logger.fine("Received log report from backend: " + event.getServerName());
+            }
+        }
     }
 
     /**
@@ -76,6 +173,47 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
                 new VelocityPlayerListener(this, proxy, notificationService));
         
         logger.info("Velocity事件监听器已注册");
+    }
+
+    /**
+     * Get the proxy bridge (only available when proxy bridge is enabled).
+     */
+    public VelocityProxyBridge getProxyBridge() {
+        return proxyBridge;
+    }
+
+    /**
+     * Override command routing to support sending commands to backend servers.
+     */
+    @Override
+    protected void routeCommandToBackend(io.github.railgun19457.astrbotadapter.communication.protocol.Message message,
+                                          String targetServer, String command,
+                                          String executor, String playerUuid) {
+        if (proxyBridge == null) {
+            super.routeCommandToBackend(message, targetServer, command, executor, playerUuid);
+            return;
+        }
+
+        boolean sent = proxyBridge.sendCommandToBackend(
+                targetServer, command, executor, playerUuid, message.getId());
+
+        if (!sent) {
+            JsonObject payload = new JsonObject();
+            payload.addProperty("code", io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode.COMMAND_EXECUTE_FAILED.getCode());
+            payload.addProperty("message", "无法将指令发送到后端服务器: " + targetServer);
+            payload.addProperty("detail", "后端服务器未连接或无在线玩家");
+
+            io.github.railgun19457.astrbotadapter.communication.protocol.Message error =
+                    io.github.railgun19457.astrbotadapter.communication.protocol.Message.builder()
+                    .type(MessageType.ERROR)
+                    .replyTo(message.getId())
+                    .payload(payload)
+                    .build();
+
+            if (unifiedServer != null) {
+                unifiedServer.broadcast(error);
+            }
+        }
     }
 
     /**

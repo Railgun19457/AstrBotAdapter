@@ -268,6 +268,19 @@ public class ConfigManager {
             config.setUpdateCheckEnabled(getBoolean(update, "enabled", true));
             config.setUpdateNotifyOps(getBoolean(update, "notifyOps", true));
         }
+
+        // 代理模式
+        Map<String, Object> proxyMode = getMap(yaml, "proxyMode");
+        if (proxyMode != null) {
+            config.setProxyModeEnabled(getBoolean(proxyMode, "enabled", false));
+            config.setProxySecret(getString(proxyMode, "secret", ""));
+        }
+
+        // 代理桥接 (Velocity端)
+        Map<String, Object> proxyBridge = getMap(yaml, "proxyBridge");
+        if (proxyBridge != null) {
+            config.setProxyBridgeEnabled(getBoolean(proxyBridge, "enabled", false));
+        }
     }
 
     // ===== YAML 解析器 =====
@@ -380,7 +393,18 @@ public class ConfigManager {
         updateCheck.put("enabled", config.isUpdateCheckEnabled());
         updateCheck.put("notifyOps", config.isUpdateNotifyOps());
         root.put("updateCheck", updateCheck);
-        
+
+        // proxyMode (backend)
+        java.util.LinkedHashMap<String, Object> proxyModeMap = new java.util.LinkedHashMap<>();
+        proxyModeMap.put("enabled", config.isProxyModeEnabled());
+        proxyModeMap.put("secret", config.getProxySecret());
+        root.put("proxyMode", proxyModeMap);
+
+        // proxyBridge (Velocity)
+        java.util.LinkedHashMap<String, Object> proxyBridgeMap = new java.util.LinkedHashMap<>();
+        proxyBridgeMap.put("enabled", config.isProxyBridgeEnabled());
+        root.put("proxyBridge", proxyBridgeMap);
+
         return root;
     }
 

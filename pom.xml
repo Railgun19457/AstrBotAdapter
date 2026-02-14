@@ -130,6 +130,7 @@
                                 <exclude>**/platform/folia/**</exclude>
                                 <exclude>**/AstrbotAdapterVelocity.java</exclude>
                                 <exclude>**/AstrbotAdapterFolia.java</exclude>
+                                <exclude>**/VelocityProxyBridge.java</exclude>
                             </excludes>
                         </configuration>
                     </plugin>
@@ -174,6 +175,7 @@
                                 <exclude>**/platform/velocity/**</exclude>
                                 <exclude>**/AstrbotAdapterVelocity.java</exclude>
                                 <exclude>**/AstrbotAdapterBukkit.java</exclude>
+                                <exclude>**/VelocityProxyBridge.java</exclude>
                             </excludes>
                         </configuration>
                     </plugin>
@@ -241,9 +243,10 @@
                                 <!-- 排除Bukkit插件入口 -->
                                 <exclude>**/AstrbotAdapterBukkit.java</exclude>
                                 <exclude>**/AstrbotAdapterFolia.java</exclude>
-                                <!-- 排除依赖Bukkit API的命令和更新模块 -->
+                                <!-- 排除依赖Bukkit API的模块 -->
                                 <exclude>**/command/**</exclude>
                                 <exclude>**/update/**</exclude>
+                                <exclude>**/BukkitProxyClient.java</exclude>
                             </excludes>
                         </configuration>
                     </plugin>

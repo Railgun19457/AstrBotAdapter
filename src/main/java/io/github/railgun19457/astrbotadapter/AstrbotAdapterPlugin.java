@@ -134,6 +134,13 @@ public abstract class AstrbotAdapterPlugin {
     private void initializeCommunication() {
         PluginConfig config = configManager.getConfig();
 
+        // Proxy mode: backend does not start WS/REST server
+        if (config.isProxyModeEnabled()) {
+            logger.info("代理模式已启用，跳过WS/REST服务器初始化");
+            logger.info("通信组件初始化完成 (代理模式)");
+            return;
+        }
+
         // 使用统一服务器（WebSocket + REST API 共用端口）
         if (config.isWsEnabled() || config.isRestEnabled()) {
             unifiedServer = new UnifiedServer(
@@ -181,6 +188,10 @@ public abstract class AstrbotAdapterPlugin {
      * 启动服务器
      */
     private void startServers() {
+        if (configManager.getConfig().isProxyModeEnabled()) {
+            logger.info("代理模式下不启动WS/REST服务器");
+            return;
+        }
         if (unifiedServer != null) {
             unifiedServer.start();
         }
@@ -301,7 +312,7 @@ public abstract class AstrbotAdapterPlugin {
     }
 
     private void handleCommandRequest(Message message) {
-        if (webSocketServer == null) {
+        if (unifiedServer == null) {
             return;
         }
 
@@ -332,9 +343,18 @@ public abstract class AstrbotAdapterPlugin {
             return;
         }
 
-        boolean success = false;
         String executor = JsonUtil.getString(payload, "executor", "CONSOLE");
         String playerUuid = JsonUtil.getString(payload, "playerUuid", null);
+
+        // Check if this command should be routed to a backend server via proxy bridge
+        String targetServer = JsonUtil.getString(payload, "targetServer", null);
+        if (targetServer != null && !targetServer.isEmpty()) {
+            routeCommandToBackend(message, targetServer, command, executor, playerUuid);
+            return;
+        }
+
+        // Execute locally on this server (proxy or standalone)
+        boolean success = false;
         long startTime = System.currentTimeMillis();
 
         try {
@@ -431,6 +451,17 @@ public abstract class AstrbotAdapterPlugin {
                 .build();
 
         unifiedServer.broadcast(error);
+    }
+
+    /**
+     * Route a command to a backend server via the proxy bridge.
+     * Only available on Velocity with proxy bridge enabled.
+     */
+    protected void routeCommandToBackend(Message message, String targetServer,
+                                          String command, String executor, String playerUuid) {
+        // Default implementation: not supported (overridden in Velocity)
+        sendCommandError(message, ErrorCode.FEATURE_DISABLED,
+                "Command routing to backend servers is only available on Velocity with proxy bridge enabled");
     }
 
     private boolean isCommandAllowed(String command) {
