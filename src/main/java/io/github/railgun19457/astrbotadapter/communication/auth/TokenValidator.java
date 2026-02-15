@@ -13,7 +13,7 @@ public class TokenValidator {
 
     /**
      * 验证Token
-     * @param token 待验证的Token
+     * @param token 待验证的Token（原始值，不带Bearer前缀）
      * @return 验证结果
      */
     public AuthResult validate(String token) {
@@ -21,17 +21,11 @@ public class TokenValidator {
             return AuthResult.missingToken();
         }
 
-        // 移除Bearer前缀
-        String actualToken = token;
-        if (token.startsWith("Bearer ")) {
-            actualToken = token.substring(7);
-        }
-
         if (validToken == null || validToken.isEmpty()) {
             return AuthResult.failure("服务器Token未配置", 1001);
         }
 
-        if (validToken.equals(actualToken)) {
+        if (validToken.equals(token)) {
             return AuthResult.success();
         }
 

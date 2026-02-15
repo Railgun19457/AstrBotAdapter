@@ -7,8 +7,6 @@ import java.nio.file.Path;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.logging.Logger;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * 国际化管理器
@@ -16,8 +14,6 @@ import java.util.regex.Pattern;
  */
 public class I18NManager {
 
-    private static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\{([^}]+)}");
-    
     private final Path langFolder;
     private final Logger logger;
     private final Map<String, String> messages;

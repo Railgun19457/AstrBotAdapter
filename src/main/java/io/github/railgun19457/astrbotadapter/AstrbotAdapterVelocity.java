@@ -12,6 +12,7 @@ import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
 import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
 import io.github.railgun19457.astrbotadapter.communication.proxy.VelocityProxyBridge;
 import io.github.railgun19457.astrbotadapter.core.config.ConfigManager.ConfigPlatform;
+import io.github.railgun19457.astrbotadapter.core.util.JsonUtil;
 import io.github.railgun19457.astrbotadapter.platform.velocity.VelocityAdapter;
 import io.github.railgun19457.astrbotadapter.platform.velocity.listener.VelocityPlayerListener;
 import org.slf4j.Logger;
@@ -122,65 +123,91 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
             case CHAT_MESSAGE -> {
                 // Backend has already handled AI chat triggers locally.
                 // We receive the raw chat message and forward it for message forwarding only.
-                String playerUuid = data.has("playerUuid") ? data.get("playerUuid").getAsString() : null;
-                String playerName = data.has("playerName") ? data.get("playerName").getAsString() : "Unknown";
-                String displayName = data.has("displayName") ? data.get("displayName").getAsString() : playerName;
-                String message = data.has("message") ? data.get("message").getAsString() : "";
+                String message = getJsonString(data, "message", "");
+                UUID playerUuid = getPlayerUuid(data);
 
                 if (!message.isEmpty() && messageForwardService != null
-                        && messageForwardService.shouldForward(message)) {
+                        && messageForwardService.shouldForward(message)
+                        && playerUuid != null) {
                     messageForwardService.handlePlayerMessage(
-                            playerUuid != null ? UUID.fromString(playerUuid) : UUID.randomUUID(),
-                            playerName, displayName, message);
+                            playerUuid, getJsonString(data, "playerName", "Unknown"),
+                            getDisplayName(data), message);
                 }
             }
             case AI_CHAT_REQUEST -> {
                 // Backend detected an AI chat trigger and sent us the processed request.
-                // Forward it to Astrbot via ChatService.
-                String playerUuid = data.has("playerUuid") ? data.get("playerUuid").getAsString() : null;
-                String playerName = data.has("playerName") ? data.get("playerName").getAsString() : "Unknown";
-                String displayName = data.has("displayName") ? data.get("displayName").getAsString() : playerName;
-                String content = data.has("content") ? data.get("content").getAsString() : "";
-                String chatMode = data.has("chatMode") ? data.get("chatMode").getAsString() : "GROUP";
+                String content = getJsonString(data, "content", "");
+                String chatMode = getJsonString(data, "chatMode", "GROUP");
+                UUID playerUuid = getPlayerUuid(data);
 
-                if (!content.isEmpty() && chatService != null) {
+                if (!content.isEmpty() && chatService != null && playerUuid != null) {
                     io.github.railgun19457.astrbotadapter.service.chat.ChatMode mode =
                             io.github.railgun19457.astrbotadapter.service.chat.ChatMode.fromString(chatMode);
                     chatService.sendChatRequest(
-                            playerUuid != null ? UUID.fromString(playerUuid) : UUID.randomUUID(),
-                            playerName, displayName, content, mode);
+                            playerUuid, getJsonString(data, "playerName", "Unknown"),
+                            getDisplayName(data), content, mode);
                 }
             }
             case PLAYER_JOIN -> {
                 if (notificationService != null) {
-                    String playerUuid = data.has("playerUuid") ? data.get("playerUuid").getAsString() : null;
-                    String playerName = data.has("playerName") ? data.get("playerName").getAsString() : "Unknown";
-                    String displayName = data.has("displayName") ? data.get("displayName").getAsString() : playerName;
-
-                    if (playerUuid != null) {
+                    UUID uuid = getPlayerUuid(data);
+                    if (uuid != null) {
                         notificationService.notifyPlayerJoin(
-                                UUID.fromString(playerUuid), playerName, displayName);
+                                uuid,
+                                getJsonString(data, "playerName", "Unknown"),
+                                getDisplayName(data),
+                                event.getServerName(),
+                                getJsonInt(data, "onlineCount", 0),
+                                getJsonInt(data, "maxPlayers", 0));
                     }
                 }
             }
             case PLAYER_QUIT -> {
                 if (notificationService != null) {
-                    String playerUuid = data.has("playerUuid") ? data.get("playerUuid").getAsString() : null;
-                    String playerName = data.has("playerName") ? data.get("playerName").getAsString() : "Unknown";
-                    String displayName = data.has("displayName") ? data.get("displayName").getAsString() : playerName;
-                    String reason = data.has("reason") ? data.get("reason").getAsString() : "QUIT";
-
-                    if (playerUuid != null) {
+                    UUID uuid = getPlayerUuid(data);
+                    if (uuid != null) {
                         notificationService.notifyPlayerQuit(
-                                UUID.fromString(playerUuid), playerName, displayName, reason);
+                                uuid,
+                                getJsonString(data, "playerName", "Unknown"),
+                                getDisplayName(data),
+                                getJsonString(data, "reason", "QUIT"),
+                                event.getServerName(),
+                                getJsonInt(data, "onlineCount", 0),
+                                getJsonInt(data, "maxPlayers", 0));
                     }
                 }
             }
             case LOG_REPORT -> {
-                // Log reports can be cached or forwarded as needed
                 logger.fine("Received log report from backend: " + event.getServerName());
             }
         }
+    }
+
+    // --- JSON helper methods to reduce repetitive field extraction ---
+
+    private static String getJsonString(JsonObject obj, String key, String defaultValue) {
+        return JsonUtil.getString(obj, key, defaultValue);
+    }
+
+    private static int getJsonInt(JsonObject obj, String key, int defaultValue) {
+        return JsonUtil.getInt(obj, key, defaultValue);
+    }
+
+    private static UUID getPlayerUuid(JsonObject data) {
+        String uuid = getJsonString(data, "playerUuid", null);
+        if (uuid == null || uuid.isBlank()) {
+            return null;
+        }
+        try {
+            return UUID.fromString(uuid.trim());
+        } catch (IllegalArgumentException ex) {
+            return null;
+        }
+    }
+
+    private static String getDisplayName(JsonObject data) {
+        String displayName = getJsonString(data, "displayName", null);
+        return displayName != null ? displayName : getJsonString(data, "playerName", "Unknown");
     }
 
     /**

@@ -14,6 +14,7 @@ import io.netty.handler.codec.http.HttpMethod;
 
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 玩家信息控制器
@@ -134,15 +135,24 @@ public class PlayerController {
             addBackendPlayerDetails(data, player);
         }
 
-        // 代理端：从后端缓存获取详细信息
+        // 代理端：从后端实时获取详细信息
         if (platformAdapter.getPlatformType().isProxy()) {
             String serverName = player.getConnectedServer();
             if (serverName != null) {
                 data.addProperty("server", serverName);
 
-                // Enrich with backend cached player data
+                // Request fresh player data from backend and wait
                 if (proxyBridge != null) {
-                    JsonObject cached = getCachedPlayerData(serverName, player.getUniqueId().toString());
+                    String uuid = player.getUniqueId().toString();
+                    try {
+                        CompletableFuture<JsonObject> freshDataFuture =
+                                proxyBridge.requestAndAwaitPlayerData(serverName, uuid);
+                        freshDataFuture.join(); // Block until data arrives or timeout
+                    } catch (Exception ignored) {
+                        // Timeout or PMC failure — fall back to cached data
+                    }
+                    // Now read from cache (updated by the report callback, or stale as fallback)
+                    JsonObject cached = getCachedPlayerData(serverName, uuid);
                     if (cached != null) {
                         // Copy all detailed fields from cached data
                         copyNumberIfPresent(cached, data, "health");
@@ -166,6 +176,8 @@ public class PlayerController {
                         copyIfPresent(cached, data, "isFlying");
                         copyIfPresent(cached, data, "firstPlayed");
                         copyIfPresent(cached, data, "lastPlayed");
+                        copyIfPresent(cached, data, "onlineTime");
+                        copyIfPresent(cached, data, "onlineTimeFormatted");
                     }
                 }
             }

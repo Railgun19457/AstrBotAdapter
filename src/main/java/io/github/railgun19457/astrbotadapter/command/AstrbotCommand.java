@@ -1,6 +1,7 @@
 package io.github.railgun19457.astrbotadapter.command;
 
 import io.github.railgun19457.astrbotadapter.AstrbotAdapterPlugin;
+import io.github.railgun19457.astrbotadapter.communication.UnifiedServer;
 import io.github.railgun19457.astrbotadapter.communication.websocket.SessionManager;
 import io.github.railgun19457.astrbotadapter.communication.websocket.WebSocketSession;
 import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
@@ -95,27 +96,19 @@ public class AstrbotCommand implements CommandExecutor {
         }
 
         PluginConfig config = plugin.getConfigManager().getConfig();
+        UnifiedServer server = plugin.getUnifiedServer();
 
         sender.sendMessage(colorize("&6=== AstrbotAdapter 状态 ==="));
 
-        // WebSocket 状态
-        if (config.isWsEnabled()) {
-            boolean wsRunning = plugin.getWebSocketServer() != null && plugin.getWebSocketServer().isRunning();
-            String wsStatus = wsRunning ? "&a运行中" : "&c已停止";
-            int connections = wsRunning ? plugin.getWebSocketServer().getSessionManager().getSessionCount() : 0;
-            sender.sendMessage(colorize("&eWebSocket: " + wsStatus + " &7(" + config.getWsHost() + ":" + config.getWsPort() + ")"));
-            sender.sendMessage(colorize("  &7当前连接数: &f" + connections));
+        // 统一服务器状态
+        if (config.isWsEnabled() || config.isRestEnabled()) {
+            boolean running = server != null && server.isRunning();
+            String status = running ? "&a运行中" : "&c已停止";
+            int connections = running ? server.getSessionManager().getSessionCount() : 0;
+            sender.sendMessage(colorize("&e服务器: " + status + " &7(端口: " + config.getServerPort() + ")"));
+            sender.sendMessage(colorize("  &7WebSocket连接数: &f" + connections));
         } else {
-            sender.sendMessage(colorize("&eWebSocket: &7已禁用"));
-        }
-
-        // REST API 状态
-        if (config.isRestEnabled()) {
-            boolean restRunning = plugin.getRestApiServer() != null && plugin.getRestApiServer().isRunning();
-            String restStatus = restRunning ? "&a运行中" : "&c已停止";
-            sender.sendMessage(colorize("&eREST API: " + restStatus + " &7(" + config.getRestHost() + ":" + config.getRestPort() + ")"));
-        } else {
-            sender.sendMessage(colorize("&eREST API: &7已禁用"));
+            sender.sendMessage(colorize("&e服务器: &7已禁用"));
         }
 
         // 服务状态
@@ -175,12 +168,13 @@ public class AstrbotCommand implements CommandExecutor {
             return;
         }
 
-        if (plugin.getWebSocketServer() == null || !plugin.getWebSocketServer().isRunning()) {
-            sender.sendMessage(colorize("&cWebSocket 服务器未运行"));
+        UnifiedServer server = plugin.getUnifiedServer();
+        if (server == null || !server.isRunning()) {
+            sender.sendMessage(colorize("&c服务器未运行"));
             return;
         }
 
-        SessionManager sessionManager = plugin.getWebSocketServer().getSessionManager();
+        SessionManager sessionManager = server.getSessionManager();
         Collection<WebSocketSession> sessions = sessionManager.getAllSessions();
 
         if (sessions.isEmpty()) {

@@ -2,11 +2,9 @@ package io.github.railgun19457.astrbotadapter;
 
 import io.github.railgun19457.astrbotadapter.communication.UnifiedServer;
 import io.github.railgun19457.astrbotadapter.communication.auth.AuthManager;
-import io.github.railgun19457.astrbotadapter.communication.rest.RestApiServer;
 import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
 import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
-import io.github.railgun19457.astrbotadapter.communication.websocket.WebSocketServer;
 import io.github.railgun19457.astrbotadapter.core.config.ConfigManager;
 import io.github.railgun19457.astrbotadapter.core.config.ConfigManager.ConfigPlatform;
 import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
@@ -15,6 +13,7 @@ import io.github.railgun19457.astrbotadapter.core.i18n.I18NManager;
 import io.github.railgun19457.astrbotadapter.core.i18n.MessageKey;
 import io.github.railgun19457.astrbotadapter.core.util.JsonUtil;
 import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
+import io.github.railgun19457.astrbotadapter.service.command.CommandExecutionService;
 import io.github.railgun19457.astrbotadapter.service.chat.ChatService;
 import io.github.railgun19457.astrbotadapter.service.forward.MessageForwardService;
 import io.github.railgun19457.astrbotadapter.service.notification.NotificationService;
@@ -24,9 +23,6 @@ import com.google.gson.JsonObject;
 
 import java.io.File;
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.UUID;
 import java.util.logging.Logger;
 
 /**
@@ -46,12 +42,8 @@ public abstract class AstrbotAdapterPlugin {
     protected EventBus eventBus;
     protected AuthManager authManager;
 
-    // 通信组件（新版统一服务器）
+    // 通信组件（统一服务器）
     protected UnifiedServer unifiedServer;
-    
-    // 通信组件（保留旧版兼容）
-    protected WebSocketServer webSocketServer;
-    protected RestApiServer restApiServer;
 
     // 服务组件
     protected ChatService chatService;
@@ -60,9 +52,6 @@ public abstract class AstrbotAdapterPlugin {
 
     // 平台适配器
     protected PlatformAdapter platformAdapter;
-
-    private static final int COMMAND_LOG_LIMIT = 200;
-    private static final long COMMAND_LOG_CAPTURE_BUFFER_MS = 1500;
 
     /**
      * 获取插件实例
@@ -78,8 +67,8 @@ public abstract class AstrbotAdapterPlugin {
         instance = this;
 
         // 确保数据目录存在
-        if (!dataFolder.exists()) {
-            dataFolder.mkdirs();
+        if (!dataFolder.exists() && !dataFolder.mkdirs()) {
+            logger.warning("无法创建数据目录: " + dataFolder.getAbsolutePath());
         }
 
         // 初始化核心组件
@@ -233,7 +222,9 @@ public abstract class AstrbotAdapterPlugin {
         }
 
         // 保存配置
-        configManager.saveConfig();
+        if (configManager != null) {
+            configManager.saveConfig();
+        }
 
         logger.info(i18nManager.getMessage(MessageKey.PLUGIN_DISABLED));
         instance = null;
@@ -283,12 +274,8 @@ public abstract class AstrbotAdapterPlugin {
         return authManager;
     }
 
-    public WebSocketServer getWebSocketServer() {
-        return webSocketServer;
-    }
-
-    public RestApiServer getRestApiServer() {
-        return restApiServer;
+    public UnifiedServer getUnifiedServer() {
+        return unifiedServer;
     }
 
     public ChatService getChatService() {
@@ -348,76 +335,58 @@ public abstract class AstrbotAdapterPlugin {
         }
 
         String command = JsonUtil.getString(payload, "command", null);
-        if (command == null || command.isEmpty()) {
-            sendCommandError(message, ErrorCode.REQUEST_PARAM_MISSING, "缺少command参数");
+        CommandExecutionService.ValidationResult validation =
+                CommandExecutionService.validateAndNormalizeCommand(command, config);
+        if (!validation.isValid()) {
+            sendCommandError(message, validation.errorCode(), validation.detail());
             return;
         }
+        command = validation.command();
 
-        if (command.startsWith("/")) {
-            command = command.substring(1);
-        }
-
-        if (!isCommandAllowed(command)) {
-            sendCommandError(message, ErrorCode.COMMAND_FILTERED, "指令被过滤: " + command);
-            return;
-        }
-
-        String executor = JsonUtil.getString(payload, "executor", "CONSOLE");
+        String executor = JsonUtil.getString(payload, "executor", CommandExecutionService.EXECUTOR_CONSOLE);
         String playerUuid = JsonUtil.getString(payload, "playerUuid", null);
 
         // Check if this command should be routed to a backend server via proxy bridge
         String targetServer = JsonUtil.getString(payload, "targetServer", null);
+        if (targetServer != null) {
+            targetServer = targetServer.trim();
+        }
         if (targetServer != null && !targetServer.isEmpty()) {
             routeCommandToBackend(message, targetServer, command, executor, playerUuid);
             return;
         }
 
         // Execute locally on this server (proxy or standalone)
-        boolean success = false;
-        long startTime = System.currentTimeMillis();
-
-        try {
-            if ("PLAYER".equalsIgnoreCase(executor)) {
-                if (playerUuid == null) {
-                    sendCommandError(message, ErrorCode.REQUEST_PARAM_MISSING, "缺少playerUuid参数");
-                    return;
-                }
-                var playerOpt = platformAdapter.getPlayer(UUID.fromString(playerUuid));
-                if (playerOpt.isEmpty()) {
-                    sendCommandError(message, ErrorCode.PLAYER_NOT_ONLINE, "玩家不在线: " + playerUuid);
-                    return;
-                }
-                success = platformAdapter.executeCommand(playerOpt.get(), command);
-            } else {
-                success = platformAdapter.executeCommand(command);
-            }
-        } catch (Exception e) {
-            logger.warning("外部指令执行异常: " + e.getMessage());
-            success = false;
+        CommandExecutionService.ExecutionResult result = CommandExecutionService.executeLocalCommand(
+                platformAdapter,
+                command,
+                executor,
+                playerUuid,
+                logger
+        );
+        if (!result.success()) {
+            sendCommandError(message,
+                    result.errorCode() == null ? ErrorCode.COMMAND_EXECUTE_FAILED : result.errorCode(),
+                    result.errorMessage());
+            return;
         }
-        long endTime = System.currentTimeMillis();
 
         JsonObject responsePayload = new JsonObject();
-        responsePayload.addProperty("success", success);
-        responsePayload.addProperty("command", command);
-        responsePayload.addProperty("output", success ? "Command executed" : "Command execute failed");
-        if (success) {
-            responsePayload.addProperty("executionTime", endTime - startTime);
-            List<String> logs = collectCommandLogs(startTime, endTime);
-            if (!logs.isEmpty()) {
-                JsonArray logArray = new JsonArray();
-                for (String log : logs) {
-                    logArray.add(log);
-                }
-                responsePayload.add("logs", logArray);
-                responsePayload.addProperty("output", String.join("\n", logs));
+        responsePayload.addProperty("success", true);
+        responsePayload.addProperty("command", result.command());
+        responsePayload.addProperty("executionTime", result.executionTime());
+        responsePayload.addProperty("output", "Command executed");
+
+        if (!result.logs().isEmpty()) {
+            JsonArray logArray = new JsonArray();
+            for (String log : result.logs()) {
+                logArray.add(log);
             }
-            responsePayload.add("errorCode", JsonNull.INSTANCE);
-            responsePayload.add("errorMessage", JsonNull.INSTANCE);
-        } else {
-            responsePayload.addProperty("errorCode", ErrorCode.COMMAND_EXECUTE_FAILED.getCode());
-            responsePayload.addProperty("errorMessage", "指令执行失败");
+            responsePayload.add("logs", logArray);
+            responsePayload.addProperty("output", String.join("\n", result.logs()));
         }
+        responsePayload.add("errorCode", JsonNull.INSTANCE);
+        responsePayload.add("errorMessage", JsonNull.INSTANCE);
 
         Message response = Message.builder()
                 .type(MessageType.COMMAND_RESPONSE)
@@ -426,29 +395,6 @@ public abstract class AstrbotAdapterPlugin {
                 .build();
 
         unifiedServer.broadcast(response);
-    }
-
-    private List<String> collectCommandLogs(long startTime, long endTime) {
-        if (platformAdapter == null) {
-            return List.of();
-        }
-
-        long from = Math.max(0, startTime - COMMAND_LOG_CAPTURE_BUFFER_MS);
-        long to = endTime + COMMAND_LOG_CAPTURE_BUFFER_MS;
-        List<String> logs;
-        try {
-            logs = platformAdapter.getLogsByTimeRange(from, to);
-        } catch (Exception e) {
-            logger.warning("获取指令日志失败: " + e.getMessage());
-            return List.of();
-        }
-
-        if (logs == null || logs.isEmpty()) {
-            return List.of();
-        }
-
-        int start = Math.max(0, logs.size() - COMMAND_LOG_LIMIT);
-        return new ArrayList<>(logs.subList(start, logs.size()));
     }
 
     private void sendCommandError(Message request, ErrorCode errorCode, String detail) {
@@ -481,32 +427,5 @@ public abstract class AstrbotAdapterPlugin {
         // Default implementation: not supported (overridden in Velocity)
         sendCommandError(message, ErrorCode.FEATURE_DISABLED,
                 "Command routing to backend servers is only available on Velocity with proxy bridge enabled");
-    }
-
-    private boolean isCommandAllowed(String command) {
-        String filterMode = configManager.getConfig().getCommandFilterMode();
-        List<String> filterList = configManager.getConfig().getCommandFilterList();
-
-        if (filterMode == null || "NONE".equalsIgnoreCase(filterMode) || filterList == null || filterList.isEmpty()) {
-            return true;
-        }
-
-        if ("WHITELIST".equalsIgnoreCase(filterMode)) {
-            return filterList.stream().anyMatch(pattern -> matchCommandPattern(pattern, command));
-        }
-
-        if ("BLACKLIST".equalsIgnoreCase(filterMode)) {
-            return filterList.stream().noneMatch(pattern -> matchCommandPattern(pattern, command));
-        }
-
-        return true;
-    }
-
-    private boolean matchCommandPattern(String pattern, String command) {
-        if (pattern == null || pattern.isEmpty()) {
-            return false;
-        }
-        String regex = pattern.replace("*", ".*");
-        return command.matches("(?i)" + regex);
     }
 }

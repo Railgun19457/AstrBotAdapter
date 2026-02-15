@@ -1,5 +1,6 @@
 package io.github.railgun19457.astrbotadapter.platform.folia;
 
+import io.github.railgun19457.astrbotadapter.core.util.LogReader;
 import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
 import io.github.railgun19457.astrbotadapter.platform.PlatformType;
 import io.github.railgun19457.astrbotadapter.platform.bukkit.BukkitPlayer;
@@ -11,19 +12,8 @@ import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.plugin.java.JavaPlugin;
 
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.ZoneId;
 import java.util.*;
 import java.util.stream.Collectors;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 /**
  * Folia平台适配器
@@ -165,69 +155,12 @@ public class FoliaAdapter implements PlatformAdapter {
 
     @Override
     public List<String> getRecentLogs(int lines) {
-        List<String> logs = new ArrayList<>();
-        Path logFile = Path.of("logs", "latest.log");
-        
-        if (!Files.exists(logFile)) {
-            return logs;
-        }
-
-        try {
-            List<String> allLines = Files.readAllLines(logFile);
-            int start = Math.max(0, allLines.size() - lines);
-            logs.addAll(allLines.subList(start, allLines.size()));
-        } catch (Exception e) {
-            plugin.getLogger().warning("读取日志文件失败: " + e.getMessage());
-        }
-
-        return logs;
+        return LogReader.getRecentLogs(lines);
     }
 
     @Override
     public List<String> getLogsByTimeRange(long startTime, long endTime) {
-        Path logFile = Path.of("logs", "latest.log");
-        if (!Files.exists(logFile)) {
-            return new ArrayList<>();
-        }
-
-        return filterLogsByTimeRange(logFile, startTime, endTime);
-    }
-
-    private List<String> filterLogsByTimeRange(Path logFile, long startTime, long endTime) {
-        List<String> logs = new ArrayList<>();
-        if (startTime <= 0 || endTime <= 0 || endTime < startTime) {
-            return logs;
-        }
-
-        ZoneId zoneId = ZoneId.systemDefault();
-        LocalDate baseDate = Instant.ofEpochMilli(startTime).atZone(zoneId).toLocalDate();
-        Pattern pattern = Pattern.compile("^(?:\\[)?(\\d{2}:\\d{2}:\\d{2})(?:\\])?");
-
-        try (BufferedReader reader = Files.newBufferedReader(logFile)) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                Matcher matcher = pattern.matcher(line);
-                if (!matcher.find()) {
-                    continue;
-                }
-
-                LocalTime time = LocalTime.parse(matcher.group(1));
-                LocalDateTime dateTime = LocalDateTime.of(baseDate, time);
-                long ts = dateTime.atZone(zoneId).toInstant().toEpochMilli();
-
-                if (ts < startTime - 12 * 60 * 60 * 1000L) {
-                    ts = dateTime.plusDays(1).atZone(zoneId).toInstant().toEpochMilli();
-                }
-
-                if (ts >= startTime && ts <= endTime) {
-                    logs.add(line);
-                }
-            }
-        } catch (IOException e) {
-            plugin.getLogger().warning("读取日志文件失败: " + e.getMessage());
-        }
-
-        return logs;
+        return LogReader.getLogsByTimeRange(startTime, endTime);
     }
 
     @Override

@@ -62,7 +62,7 @@ public class BukkitProxyClient implements PluginMessageListener {
 
         logger.info("代理模式已启用，Plugin Messaging Channel已注册: " + ProxyChannel.CHANNEL_ID);
 
-        // Schedule periodic server info reporting
+        // Schedule periodic server info reporting (async, no Bukkit API needed)
         platformAdapter.getScheduler().runTimerAsync(this::reportServerInfo, 100L, 600L); // 30s interval
     }
 
@@ -181,6 +181,20 @@ public class BukkitProxyClient implements PluginMessageListener {
         data.addProperty("isFlying", player.isFlying());
         data.addProperty("firstPlayed", player.getFirstPlayed());
         data.addProperty("lastPlayed", player.getLastPlayed());
+
+        long onlineTime = player.getOnlineTime();
+        if (onlineTime >= 0) {
+            data.addProperty("onlineTime", onlineTime);
+            // Format duration inline
+            long secs = onlineTime / 1000;
+            long mins = secs / 60;
+            long hrs = mins / 60;
+            long days = hrs / 24;
+            String fmt = (days > 0 ? days + "d " : "")
+                    + (hrs > 0 || days > 0 ? (hrs % 24) + "h " : "")
+                    + (mins % 60) + "m " + (secs % 60) + "s";
+            data.addProperty("onlineTimeFormatted", fmt.trim());
+        }
 
         CommonPlayer.PlayerLocation loc = player.getLocation();
         if (loc != null) {

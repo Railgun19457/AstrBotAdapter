@@ -293,18 +293,19 @@ ws://<host>:<port>/ws?token=<auth_token>
     "type": "PLAYER_JOIN",
     "id": "join-notification-id",
     "source": {
-        "type": "SYSTEM",
+        "type": "PLAYER",
         "server": {
             "name": "Survival",
             "platform": "Paper"
-        }
-    },
-    "payload": {
+        },
         "player": {
             "uuid": "550e8400-e29b-41d4-a716-446655440000",
             "name": "Steve",
             "displayName": "§6Steve"
-        },
+        }
+    },
+    "payload": {
+        "action": "join",
         "onlineCount": 15,
         "maxPlayers": 100
     },
@@ -318,18 +319,19 @@ ws://<host>:<port>/ws?token=<auth_token>
     "type": "PLAYER_QUIT",
     "id": "quit-notification-id",
     "source": {
-        "type": "SYSTEM",
+        "type": "PLAYER",
         "server": {
             "name": "Survival",
             "platform": "Paper"
-        }
-    },
-    "payload": {
+        },
         "player": {
             "uuid": "550e8400-e29b-41d4-a716-446655440000",
             "name": "Steve",
             "displayName": "§6Steve"
-        },
+        }
+    },
+    "payload": {
+        "action": "quit",
         "reason": "QUIT|KICK|TIMEOUT",
         "onlineCount": 14,
         "maxPlayers": 100

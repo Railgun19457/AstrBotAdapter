@@ -1,13 +1,8 @@
 package io.github.railgun19457.astrbotadapter;
 
-import io.github.railgun19457.astrbotadapter.command.AstrbotCommand;
-import io.github.railgun19457.astrbotadapter.command.AstrbotTabCompleter;
 import io.github.railgun19457.astrbotadapter.communication.proxy.BukkitProxyClient;
 import io.github.railgun19457.astrbotadapter.platform.bukkit.BukkitAdapter;
-import io.github.railgun19457.astrbotadapter.platform.bukkit.listener.BukkitChatListener;
-import io.github.railgun19457.astrbotadapter.platform.bukkit.listener.BukkitPlayerListener;
-import io.github.railgun19457.astrbotadapter.platform.bukkit.listener.BukkitProxyChatListener;
-import io.github.railgun19457.astrbotadapter.platform.bukkit.listener.BukkitProxyPlayerListener;
+import io.github.railgun19457.astrbotadapter.platform.bukkit.BukkitBootstrapSupport;
 import org.bukkit.plugin.java.JavaPlugin;
 
 /**
@@ -27,14 +22,15 @@ public class AstrbotAdapterBukkit extends JavaPlugin {
         plugin.initialize();
 
         // 注册命令
-        registerCommands();
+        BukkitBootstrapSupport.registerCommands(this, plugin);
 
         // Check if proxy mode is enabled
         if (plugin.getConfigManager().getConfig().isProxyModeEnabled()) {
-            initializeProxyMode();
+            proxyClient = BukkitBootstrapSupport.initializeProxyMode(this, plugin);
+            getLogger().info("后端服务器已进入代理模式");
         } else {
             // Register normal listeners
-            registerListeners();
+            BukkitBootstrapSupport.registerNormalListeners(this, plugin);
         }
     }
 
@@ -46,59 +42,6 @@ public class AstrbotAdapterBukkit extends JavaPlugin {
         if (plugin != null) {
             plugin.shutdown();
         }
-    }
-
-    /**
-     * Initialize proxy mode: set up Plugin Messaging Channel client.
-     */
-    private void initializeProxyMode() {
-        proxyClient = new BukkitProxyClient(
-                this,
-                plugin.getConfigManager().getConfig(),
-                plugin.getPlatformAdapter(),
-                getLogger()
-        );
-        proxyClient.initialize();
-
-        // Register proxy-mode listeners that report events to the proxy
-        getServer().getPluginManager().registerEvents(
-                new BukkitProxyChatListener(proxyClient, plugin.getConfigManager().getConfig()),
-                this
-        );
-        getServer().getPluginManager().registerEvents(
-                new BukkitProxyPlayerListener(proxyClient),
-                this
-        );
-
-        getLogger().info("后端服务器已进入代理模式");
-    }
-
-    /**
-     * 注册命令
-     */
-    private void registerCommands() {
-        AstrbotCommand commandExecutor = new AstrbotCommand(plugin);
-        AstrbotTabCompleter tabCompleter = new AstrbotTabCompleter();
-
-        getCommand("astrbot").setExecutor(commandExecutor);
-        getCommand("astrbot").setTabCompleter(tabCompleter);
-    }
-
-    /**
-     * 注册监听器 (normal mode)
-     */
-    private void registerListeners() {
-        // 聊天监听器
-        getServer().getPluginManager().registerEvents(
-                new BukkitChatListener(plugin.getChatService(), plugin.getMessageForwardService()),
-                this
-        );
-
-        // 玩家监听器
-        getServer().getPluginManager().registerEvents(
-            new BukkitPlayerListener(this, plugin.getNotificationService()),
-                this
-        );
     }
 
     /**

@@ -27,7 +27,9 @@ import java.security.SecureRandom;
 import java.util.Collection;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.logging.Logger;
 
@@ -59,6 +61,9 @@ public class VelocityProxyBridge implements ProxyBridgeProvider {
     private final Map<String, BackendServerInfo> backendServers = new ConcurrentHashMap<>();
     // Throttle unauthenticated backend warnings per server
     private final Map<String, Long> lastUnauthWarnTime = new ConcurrentHashMap<>();
+
+    // Pending player data request futures: "serverName:uuid" → future
+    private final Map<String, CompletableFuture<JsonObject>> pendingPlayerDataFutures = new ConcurrentHashMap<>();
 
     // Message broadcaster for forwarding to Astrbot via WebSocket
     private MessageBroadcaster broadcaster;
@@ -318,7 +323,15 @@ public class VelocityProxyBridge implements ProxyBridgeProvider {
 
         JsonObject data = msg.getData();
         if (data != null && data.has("uuid")) {
-            info.updatePlayerData(data.get("uuid").getAsString(), data);
+            String uuid = data.get("uuid").getAsString();
+            info.updatePlayerData(uuid, data);
+
+            // Complete any pending future waiting for this player's data
+            String futureKey = senderServer + ":" + uuid;
+            CompletableFuture<JsonObject> future = pendingPlayerDataFutures.remove(futureKey);
+            if (future != null) {
+                future.complete(data);
+            }
         }
     }
 
@@ -477,6 +490,22 @@ public class VelocityProxyBridge implements ProxyBridgeProvider {
                 .build();
 
         sendToServer(serverName, msg);
+    }
+
+    @Override
+    public CompletableFuture<JsonObject> requestAndAwaitPlayerData(String serverName, String playerUuid) {
+        String futureKey = serverName + ":" + playerUuid;
+        CompletableFuture<JsonObject> future = new CompletableFuture<>();
+        pendingPlayerDataFutures.put(futureKey, future);
+
+        // Send the request
+        requestPlayerData(serverName, playerUuid);
+
+        // Auto-cleanup on timeout (3 seconds)
+        return future.orTimeout(3, TimeUnit.SECONDS).exceptionally(ex -> {
+            pendingPlayerDataFutures.remove(futureKey);
+            return null; // Return null on timeout, caller falls back to cache
+        });
     }
 
     /**

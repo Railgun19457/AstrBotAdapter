@@ -33,6 +33,17 @@ public class NotificationService {
      * 发送玩家加入通知
      */
     public void notifyPlayerJoin(UUID playerUuid, String playerName, String displayName) {
+        notifyPlayerJoin(playerUuid, playerName, displayName,
+                platformAdapter.getServerName(),
+                platformAdapter.getOnlinePlayerCount(),
+                platformAdapter.getMaxPlayers());
+    }
+
+    /**
+     * 发送玩家加入通知（使用指定的在线人数，用于代理模式转发后端事件）
+     */
+    public void notifyPlayerJoin(UUID playerUuid, String playerName, String displayName,
+                                  String serverName, int onlineCount, int maxPlayers) {
         if (!config.isJoinNotifyEnabled()) {
             return;
         }
@@ -40,30 +51,26 @@ public class NotificationService {
             return;
         }
 
-        // 构建来源信息
         Message.PlayerInfo playerInfo = new Message.PlayerInfo(
                 playerUuid.toString(), playerName, displayName);
         Message.ServerInfo serverInfo = new Message.ServerInfo(
-                platformAdapter.getServerName(),
+                serverName,
                 platformAdapter.getPlatformType().getDisplayName(),
                 platformAdapter.getServerVersion());
-        
         Message.MessageSource source = Message.MessageSource.player(playerInfo, serverInfo);
 
-        // 构建payload
         JsonObject payload = new JsonObject();
         payload.addProperty("action", "join");
+        payload.addProperty("onlineCount", onlineCount);
+        payload.addProperty("maxPlayers", maxPlayers);
 
-        // 构建消息
         Message message = Message.builder()
                 .type(MessageType.PLAYER_JOIN)
                 .source(source)
                 .payload(payload)
                 .build();
 
-        // 发送消息
         broadcaster.broadcast(message);
-        
         logger.info("玩家加入通知已发送: " + playerName);
     }
 
@@ -71,6 +78,18 @@ public class NotificationService {
      * 发送玩家离开通知
      */
     public void notifyPlayerQuit(UUID playerUuid, String playerName, String displayName, String reason) {
+        notifyPlayerQuit(playerUuid, playerName, displayName, reason,
+                platformAdapter.getServerName(),
+                platformAdapter.getOnlinePlayerCount(),
+                platformAdapter.getMaxPlayers());
+    }
+
+    /**
+     * 发送玩家离开通知（使用指定的在线人数，用于代理模式转发后端事件）
+     */
+    public void notifyPlayerQuit(UUID playerUuid, String playerName, String displayName,
+                                  String reason, String serverName,
+                                  int onlineCount, int maxPlayers) {
         if (!config.isQuitNotifyEnabled()) {
             return;
         }
@@ -78,33 +97,29 @@ public class NotificationService {
             return;
         }
 
-        // 构建来源信息
         Message.PlayerInfo playerInfo = new Message.PlayerInfo(
                 playerUuid.toString(), playerName, displayName);
         Message.ServerInfo serverInfo = new Message.ServerInfo(
-                platformAdapter.getServerName(),
+                serverName,
                 platformAdapter.getPlatformType().getDisplayName(),
                 platformAdapter.getServerVersion());
-        
         Message.MessageSource source = Message.MessageSource.player(playerInfo, serverInfo);
 
-        // 构建payload
         JsonObject payload = new JsonObject();
         payload.addProperty("action", "quit");
         if (reason != null) {
             payload.addProperty("reason", reason);
         }
+        payload.addProperty("onlineCount", onlineCount);
+        payload.addProperty("maxPlayers", maxPlayers);
 
-        // 构建消息
         Message message = Message.builder()
                 .type(MessageType.PLAYER_QUIT)
                 .source(source)
                 .payload(payload)
                 .build();
 
-        // 发送消息
         broadcaster.broadcast(message);
-        
         logger.info("玩家离开通知已发送: " + playerName);
     }
 
