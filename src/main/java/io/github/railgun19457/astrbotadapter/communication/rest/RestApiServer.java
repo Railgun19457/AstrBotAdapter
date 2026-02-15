@@ -141,9 +141,9 @@ public class RestApiServer {
      * 注册默认API路由
      */
     private void registerDefaultRoutes() {
-        ServerController serverController = new ServerController(platformAdapter);
-        PlayerController playerController = new PlayerController(platformAdapter);
-        CommandController commandController = new CommandController(platformAdapter, config, logger);
+        ServerController serverController = new ServerController(platformAdapter, null);
+        PlayerController playerController = new PlayerController(platformAdapter, null);
+        CommandController commandController = new CommandController(platformAdapter, config, null, logger);
         LogController logController = new LogController(platformAdapter, config);
 
         serverController.registerRoutes(dispatcher);

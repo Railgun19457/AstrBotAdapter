@@ -55,9 +55,6 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
     public void onProxyInitialize(ProxyInitializeEvent event) {
         initialize();
         registerVelocityListeners();
-
-        // Velocity always acts as proxy bridge
-        initializeProxyBridge();
     }
 
     @Subscribe
@@ -81,6 +78,15 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
     }
 
     /**
+     * Initialize proxy bridge before the server starts so that controllers
+     * can access backend data when routes are registered.
+     */
+    @Override
+    protected void initializeBeforeStart() {
+        initializeProxyBridge();
+    }
+
+    /**
      * Initialize the proxy bridge for aggregating backend server data.
      */
     private void initializeProxyBridge() {
@@ -90,6 +96,8 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
         // Wire up the broadcaster so bridge can forward to Astrbot
         if (unifiedServer != null) {
             proxyBridge.setBroadcaster(unifiedServer);
+            // Inject proxy bridge into UnifiedServer so controllers can access backend data
+            unifiedServer.setProxyBridge(proxyBridge);
         }
 
         // Set up event handler for backend events

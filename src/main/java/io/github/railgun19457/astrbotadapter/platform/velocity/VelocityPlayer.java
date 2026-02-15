@@ -91,6 +91,13 @@ public class VelocityPlayer implements CommonPlayer {
         return "UNKNOWN";
     }
 
+    @Override
+    public String getConnectedServer() {
+        return player.getCurrentServer()
+                .map(server -> server.getServerInfo().getName())
+                .orElse(null);
+    }
+
     /**
      * 获取原始Velocity玩家对象
      */

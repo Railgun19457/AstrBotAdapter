@@ -4,6 +4,7 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Response;
+import io.github.railgun19457.astrbotadapter.communication.proxy.ProxyBridgeProvider;
 import io.github.railgun19457.astrbotadapter.communication.rest.HttpRequestDispatcher;
 import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
 import io.github.railgun19457.astrbotadapter.core.util.JsonUtil;
@@ -18,19 +19,23 @@ import java.util.logging.Logger;
 
 /**
  * 指令执行控制器
+ * On Velocity with proxy bridge, supports targetServer parameter to route commands.
  */
 public class CommandController {
 
     private final PlatformAdapter platformAdapter;
     private final PluginConfig config;
+    private final ProxyBridgeProvider proxyBridge; // nullable
     private final Logger logger;
 
     private static final int COMMAND_LOG_LIMIT = 200;
     private static final long COMMAND_LOG_CAPTURE_BUFFER_MS = 1500;
 
-    public CommandController(PlatformAdapter platformAdapter, PluginConfig config, Logger logger) {
+    public CommandController(PlatformAdapter platformAdapter, PluginConfig config,
+                             ProxyBridgeProvider proxyBridge, Logger logger) {
         this.platformAdapter = platformAdapter;
         this.config = config;
+        this.proxyBridge = proxyBridge;
         this.logger = logger;
     }
 
@@ -79,7 +84,13 @@ public class CommandController {
             return Response.error(ErrorCode.COMMAND_FILTERED, "指令被过滤: " + command);
         }
 
-        // 执行指令
+        // Check if command should be routed to a backend server
+        String targetServer = JsonUtil.getString(params, "targetServer", null);
+        if (targetServer != null && !targetServer.isEmpty() && proxyBridge != null) {
+            return routeCommandToBackend(targetServer, command);
+        }
+
+        // 执行指令（本地）
         long startTime = System.currentTimeMillis();
         try {
             boolean success = platformAdapter.executeCommand(command);
@@ -110,6 +121,30 @@ public class CommandController {
         } catch (Exception e) {
             logger.warning("指令执行异常: " + command + " - " + e.getMessage());
             return Response.error(ErrorCode.COMMAND_EXECUTE_FAILED, e.getMessage());
+        }
+    }
+
+    /**
+     * Route a command to a specific backend server via proxy bridge.
+     * The command is sent asynchronously via PMC; this returns an immediate acknowledgement.
+     */
+    private Response routeCommandToBackend(String serverName, String command) {
+        boolean sent = proxyBridge.sendCommandToBackend(
+                serverName, command, "CONSOLE", null, null);
+
+        JsonObject data = new JsonObject();
+        data.addProperty("command", command);
+        data.addProperty("targetServer", serverName);
+
+        if (sent) {
+            data.addProperty("success", true);
+            data.addProperty("output", "Command sent to backend: " + serverName);
+            logger.info("指令已发送到后端服务器: " + serverName + " -> " + command);
+            return Response.success(data);
+        } else {
+            data.addProperty("success", false);
+            return Response.error(ErrorCode.COMMAND_EXECUTE_FAILED,
+                    "无法将指令发送到后端服务器: " + serverName + " (未连接或无在线玩家)");
         }
     }
 

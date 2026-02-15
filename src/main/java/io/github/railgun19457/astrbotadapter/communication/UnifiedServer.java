@@ -3,6 +3,7 @@ package io.github.railgun19457.astrbotadapter.communication;
 import io.github.railgun19457.astrbotadapter.communication.auth.AuthManager;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
 import io.github.railgun19457.astrbotadapter.communication.rest.HttpRequestDispatcher;
+import io.github.railgun19457.astrbotadapter.communication.proxy.ProxyBridgeProvider;
 import io.github.railgun19457.astrbotadapter.communication.rest.controller.CommandController;
 import io.github.railgun19457.astrbotadapter.communication.rest.controller.LogController;
 import io.github.railgun19457.astrbotadapter.communication.rest.controller.PlayerController;
@@ -52,6 +53,9 @@ public class UnifiedServer implements MessageBroadcaster {
     private Channel serverChannel;
     
     private volatile boolean running = false;
+
+    // Optional proxy bridge for Velocity aggregation (set after construction)
+    private ProxyBridgeProvider proxyBridge;
 
     public UnifiedServer(PluginConfig config, AuthManager authManager,
                         EventBus eventBus, PlatformAdapter platformAdapter, Logger logger) {
@@ -229,12 +233,20 @@ public class UnifiedServer implements MessageBroadcaster {
     }
 
     /**
+     * Set the proxy bridge for Velocity aggregation.
+     * Must be called before start() so that controllers can use it.
+     */
+    public void setProxyBridge(ProxyBridgeProvider proxyBridge) {
+        this.proxyBridge = proxyBridge;
+    }
+
+    /**
      * 注册默认API路由
      */
     private void registerDefaultRoutes() {
-        ServerController serverController = new ServerController(platformAdapter);
-        PlayerController playerController = new PlayerController(platformAdapter);
-        CommandController commandController = new CommandController(platformAdapter, config, logger);
+        ServerController serverController = new ServerController(platformAdapter, proxyBridge);
+        PlayerController playerController = new PlayerController(platformAdapter, proxyBridge);
+        CommandController commandController = new CommandController(platformAdapter, config, proxyBridge, logger);
         LogController logController = new LogController(platformAdapter, config);
 
         serverController.registerRoutes(dispatcher);

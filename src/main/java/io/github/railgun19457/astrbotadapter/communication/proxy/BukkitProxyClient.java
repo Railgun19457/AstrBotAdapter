@@ -174,13 +174,21 @@ public class BukkitProxyClient implements PluginMessageListener {
         data.addProperty("world", player.getWorld());
         data.addProperty("ping", player.getPing());
         data.addProperty("isOnline", player.isOnline());
+        data.addProperty("foodLevel", player.getFoodLevel());
+        data.addProperty("exp", player.getExp());
+        data.addProperty("totalExp", player.getTotalExp());
+        data.addProperty("isOp", player.isOp());
+        data.addProperty("isFlying", player.isFlying());
+        data.addProperty("firstPlayed", player.getFirstPlayed());
+        data.addProperty("lastPlayed", player.getLastPlayed());
 
         CommonPlayer.PlayerLocation loc = player.getLocation();
         if (loc != null) {
             JsonObject location = new JsonObject();
-            location.addProperty("x", loc.getX());
-            location.addProperty("y", loc.getY());
-            location.addProperty("z", loc.getZ());
+            location.addProperty("world", loc.getWorld());
+            location.addProperty("x", Math.round(loc.getX() * 100.0) / 100.0);
+            location.addProperty("y", Math.round(loc.getY() * 100.0) / 100.0);
+            location.addProperty("z", Math.round(loc.getZ() * 100.0) / 100.0);
             data.add("location", location);
         }
 

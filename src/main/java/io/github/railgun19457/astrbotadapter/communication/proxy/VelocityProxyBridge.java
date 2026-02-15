@@ -36,7 +36,7 @@ import java.util.logging.Logger;
  * Handles Plugin Messaging Channel communication with backend servers,
  * aggregates data from multiple backends, and forwards relevant events to Astrbot.
  */
-public class VelocityProxyBridge {
+public class VelocityProxyBridge implements ProxyBridgeProvider {
 
     private static final String CHANNEL_NAMESPACE = "astrbot";
     private static final String CHANNEL_NAME = "proxy";
@@ -406,6 +406,7 @@ public class VelocityProxyBridge {
     /**
      * Send a command to a specific backend server for execution.
      */
+    @Override
     public boolean sendCommandToBackend(String serverName, String command,
                                         String executor, String playerUuid, String requestId) {
         BackendServerInfo info = backendServers.get(serverName);
@@ -607,6 +608,7 @@ public class VelocityProxyBridge {
     /**
      * Get all connected backend servers.
      */
+    @Override
     public Map<String, BackendServerInfo> getBackendServers() {
         return backendServers;
     }
@@ -614,6 +616,7 @@ public class VelocityProxyBridge {
     /**
      * Get a specific backend server info.
      */
+    @Override
     public BackendServerInfo getBackendServer(String serverName) {
         return backendServers.get(serverName);
     }
@@ -621,6 +624,7 @@ public class VelocityProxyBridge {
     /**
      * Get the number of authenticated backends.
      */
+    @Override
     public int getAuthenticatedBackendCount() {
         return (int) backendServers.values().stream()
                 .filter(BackendServerInfo::isAuthenticated)

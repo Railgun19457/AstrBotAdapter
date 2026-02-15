@@ -94,10 +94,21 @@ public abstract class AstrbotAdapterPlugin {
         // 初始化服务组件
         initializeServices();
 
+        // Platform-specific pre-start hook (e.g. Velocity initializes proxy bridge)
+        initializeBeforeStart();
+
         // 启动服务器
         startServers();
 
         logger.info(i18nManager.getMessage(MessageKey.PLUGIN_ENABLED));
+    }
+
+    /**
+     * Hook for platform-specific initialization before the server starts.
+     * Override in Velocity to initialize the proxy bridge before routes are registered.
+     */
+    protected void initializeBeforeStart() {
+        // Default: no-op
     }
 
     /**

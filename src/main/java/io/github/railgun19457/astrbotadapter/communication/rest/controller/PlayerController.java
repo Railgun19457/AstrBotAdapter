@@ -4,25 +4,29 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Response;
+import io.github.railgun19457.astrbotadapter.communication.proxy.BackendServerInfo;
+import io.github.railgun19457.astrbotadapter.communication.proxy.ProxyBridgeProvider;
 import io.github.railgun19457.astrbotadapter.communication.rest.HttpRequestDispatcher;
 import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
 import io.github.railgun19457.astrbotadapter.platform.common.CommonPlayer;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
-import io.netty.handler.codec.http.QueryStringDecoder;
 
-import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 /**
  * 玩家信息控制器
+ * On Velocity with proxy bridge, enriches player data from backend cache.
  */
 public class PlayerController {
 
     private final PlatformAdapter platformAdapter;
+    private final ProxyBridgeProvider proxyBridge; // nullable
 
-    public PlayerController(PlatformAdapter platformAdapter) {
+    public PlayerController(PlatformAdapter platformAdapter, ProxyBridgeProvider proxyBridge) {
         this.platformAdapter = platformAdapter;
+        this.proxyBridge = proxyBridge;
     }
 
     /**
@@ -51,6 +55,7 @@ public class PlayerController {
             playerData.addProperty("ping", player.getPing());
 
             if (platformAdapter.getPlatformType().isBackend()) {
+                // Backend: use live data
                 String world = player.getWorld();
                 String gameMode = player.getGameMode();
                 if (world != null) {
@@ -60,6 +65,22 @@ public class PlayerController {
                     playerData.addProperty("gameMode", gameMode);
                 }
                 playerData.addProperty("isOp", player.isOp());
+            } else if (proxyBridge != null) {
+                // Proxy: show which backend server the player is on + cached data
+                String serverName = player.getConnectedServer();
+                if (serverName != null) {
+                    playerData.addProperty("server", serverName);
+
+                    // Enrich with backend cached data
+                    JsonObject cached = getCachedPlayerData(serverName, player.getUniqueId().toString());
+                    if (cached != null) {
+                        copyIfPresent(cached, playerData, "world");
+                        copyIfPresent(cached, playerData, "gameMode");
+                        copyIfPresent(cached, playerData, "health");
+                        copyIfPresent(cached, playerData, "maxHealth");
+                        copyIfPresent(cached, playerData, "level");
+                    }
+                }
             }
             
             players.add(playerData);
@@ -110,45 +131,111 @@ public class PlayerController {
 
         // 后端服务器特有信息
         if (platformAdapter.getPlatformType().isBackend()) {
-            data.addProperty("health", player.getHealth());
-            data.addProperty("maxHealth", player.getMaxHealth());
-            data.addProperty("foodLevel", player.getFoodLevel());
-            data.addProperty("level", player.getLevel());
-            data.addProperty("exp", player.getExp());
-            data.addProperty("totalExp", player.getTotalExp());
-            data.addProperty("gameMode", player.getGameMode());
-            data.addProperty("world", player.getWorld());
-            data.addProperty("isOp", player.isOp());
-            data.addProperty("isFlying", player.isFlying());
-            data.addProperty("firstPlayed", player.getFirstPlayed());
-            data.addProperty("lastPlayed", player.getLastPlayed());
-
-            long onlineTime = player.getOnlineTime();
-            if (onlineTime >= 0) {
-                data.addProperty("onlineTime", onlineTime);
-                data.addProperty("onlineTimeFormatted", formatDuration(onlineTime));
-            }
-            
-            CommonPlayer.PlayerLocation loc = player.getLocation();
-            if (loc != null) {
-                JsonObject location = new JsonObject();
-                location.addProperty("world", loc.getWorld());
-                location.addProperty("x", Math.round(loc.getX() * 100.0) / 100.0);
-                location.addProperty("y", Math.round(loc.getY() * 100.0) / 100.0);
-                location.addProperty("z", Math.round(loc.getZ() * 100.0) / 100.0);
-                data.add("location", location);
-            }
+            addBackendPlayerDetails(data, player);
         }
 
-        // 代理端特有信息
+        // 代理端：从后端缓存获取详细信息
         if (platformAdapter.getPlatformType().isProxy()) {
-            String server = player.getConnectedServer();
-            if (server != null) {
-                data.addProperty("server", server);
+            String serverName = player.getConnectedServer();
+            if (serverName != null) {
+                data.addProperty("server", serverName);
+
+                // Enrich with backend cached player data
+                if (proxyBridge != null) {
+                    JsonObject cached = getCachedPlayerData(serverName, player.getUniqueId().toString());
+                    if (cached != null) {
+                        // Copy all detailed fields from cached data
+                        copyNumberIfPresent(cached, data, "health");
+                        copyNumberIfPresent(cached, data, "maxHealth");
+                        copyIfPresent(cached, data, "level");
+                        copyIfPresent(cached, data, "gameMode");
+                        copyIfPresent(cached, data, "world");
+                        copyIfPresent(cached, data, "isOnline");
+                        copyIfPresent(cached, data, "ping");
+
+                        // Location from cached data
+                        if (cached.has("location") && cached.get("location").isJsonObject()) {
+                            data.add("location", cached.getAsJsonObject("location"));
+                        }
+
+                        // Additional fields the backend might have reported
+                        copyIfPresent(cached, data, "foodLevel");
+                        copyIfPresent(cached, data, "exp");
+                        copyIfPresent(cached, data, "totalExp");
+                        copyIfPresent(cached, data, "isOp");
+                        copyIfPresent(cached, data, "isFlying");
+                        copyIfPresent(cached, data, "firstPlayed");
+                        copyIfPresent(cached, data, "lastPlayed");
+                    }
+                }
             }
         }
 
         return Response.success(data);
+    }
+
+    /**
+     * Add backend-specific detailed player fields.
+     */
+    private void addBackendPlayerDetails(JsonObject data, CommonPlayer player) {
+        data.addProperty("health", player.getHealth());
+        data.addProperty("maxHealth", player.getMaxHealth());
+        data.addProperty("foodLevel", player.getFoodLevel());
+        data.addProperty("level", player.getLevel());
+        data.addProperty("exp", player.getExp());
+        data.addProperty("totalExp", player.getTotalExp());
+        data.addProperty("gameMode", player.getGameMode());
+        data.addProperty("world", player.getWorld());
+        data.addProperty("isOp", player.isOp());
+        data.addProperty("isFlying", player.isFlying());
+        data.addProperty("firstPlayed", player.getFirstPlayed());
+        data.addProperty("lastPlayed", player.getLastPlayed());
+
+        long onlineTime = player.getOnlineTime();
+        if (onlineTime >= 0) {
+            data.addProperty("onlineTime", onlineTime);
+            data.addProperty("onlineTimeFormatted", formatDuration(onlineTime));
+        }
+
+        CommonPlayer.PlayerLocation loc = player.getLocation();
+        if (loc != null) {
+            JsonObject location = new JsonObject();
+            location.addProperty("world", loc.getWorld());
+            location.addProperty("x", Math.round(loc.getX() * 100.0) / 100.0);
+            location.addProperty("y", Math.round(loc.getY() * 100.0) / 100.0);
+            location.addProperty("z", Math.round(loc.getZ() * 100.0) / 100.0);
+            data.add("location", location);
+        }
+    }
+
+    /**
+     * Get cached player data from backend via proxy bridge.
+     */
+    private JsonObject getCachedPlayerData(String serverName, String uuid) {
+        if (proxyBridge == null) return null;
+
+        BackendServerInfo backend = proxyBridge.getBackendServer(serverName);
+        if (backend == null || !backend.isAuthenticated()) return null;
+
+        return backend.getPlayerDataCache().get(uuid);
+    }
+
+    /**
+     * Copy a JSON property if it exists.
+     */
+    private void copyIfPresent(JsonObject from, JsonObject to, String key) {
+        if (from.has(key)) {
+            to.add(key, from.get(key));
+        }
+    }
+
+    /**
+     * Copy a JSON number property if it exists.
+     */
+    private void copyNumberIfPresent(JsonObject from, JsonObject to, String key) {
+        if (from.has(key) && from.get(key).isJsonPrimitive()) {
+            to.add(key, from.get(key));
+        }
     }
 
     private String formatDuration(long millis) {

@@ -4,25 +4,31 @@ import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Response;
+import io.github.railgun19457.astrbotadapter.communication.proxy.BackendServerInfo;
+import io.github.railgun19457.astrbotadapter.communication.proxy.ProxyBridgeProvider;
 import io.github.railgun19457.astrbotadapter.communication.rest.HttpRequestDispatcher;
 import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
 import io.github.railgun19457.astrbotadapter.platform.common.CommonServer;
 import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
 /**
  * 服务器信息控制器
+ * On Velocity with proxy bridge, aggregates info from all backend servers.
  */
 public class ServerController {
 
     private final PlatformAdapter platformAdapter;
+    private final ProxyBridgeProvider proxyBridge; // nullable, only set on Velocity
 
-    public ServerController(PlatformAdapter platformAdapter) {
+    public ServerController(PlatformAdapter platformAdapter, ProxyBridgeProvider proxyBridge) {
         this.platformAdapter = platformAdapter;
+        this.proxyBridge = proxyBridge;
     }
 
     /**
@@ -36,6 +42,8 @@ public class ServerController {
 
     /**
      * 获取服务器信息
+     * Velocity: includes proxy info + all backend servers
+     * Backend: only local server info
      */
     private Response getServerInfo(FullHttpRequest request) {
         if (request.method() != HttpMethod.GET) {
@@ -56,11 +64,38 @@ public class ServerController {
             return result;
         });
 
+        // Proxy mode: append backend server list
+        if (proxyBridge != null) {
+            JsonArray backends = new JsonArray();
+            int totalBackendPlayers = 0;
+            int totalBackendMaxPlayers = 0;
+
+            for (Map.Entry<String, BackendServerInfo> entry : proxyBridge.getBackendServers().entrySet()) {
+                BackendServerInfo info = entry.getValue();
+                if (!info.isAuthenticated()) continue;
+
+                backends.add(info.toJson());
+                totalBackendPlayers += info.getOnlineCount();
+                totalBackendMaxPlayers += info.getMaxPlayers();
+            }
+
+            data.add("backends", backends);
+            data.addProperty("backendCount", backends.size());
+
+            // Aggregated totals across all backends
+            JsonObject aggregate = new JsonObject();
+            aggregate.addProperty("totalOnlinePlayers", totalBackendPlayers);
+            aggregate.addProperty("totalMaxPlayers", totalBackendMaxPlayers);
+            data.add("aggregate", aggregate);
+        }
+
         return Response.success(data);
     }
 
     /**
      * 获取服务器状态
+     * Velocity: includes proxy status + all backend statuses
+     * Backend: only local status
      */
     private Response getServerStatus(FullHttpRequest request) {
         if (request.method() != HttpMethod.GET) {
@@ -100,11 +135,47 @@ public class ServerController {
         memory.addProperty("max", runtime.maxMemory() / 1024 / 1024);
         data.add("memory", memory);
 
+        // Proxy mode: append backend statuses
+        if (proxyBridge != null) {
+            JsonArray backends = new JsonArray();
+
+            for (Map.Entry<String, BackendServerInfo> entry : proxyBridge.getBackendServers().entrySet()) {
+                BackendServerInfo info = entry.getValue();
+                if (!info.isAuthenticated()) continue;
+
+                JsonObject backendStatus = new JsonObject();
+                backendStatus.addProperty("name", info.getServerName());
+                backendStatus.addProperty("platform", info.getPlatform());
+                backendStatus.addProperty("version", info.getVersion());
+                backendStatus.addProperty("online", true);
+                backendStatus.addProperty("onlinePlayers", info.getOnlineCount());
+                backendStatus.addProperty("maxPlayers", info.getMaxPlayers());
+                backendStatus.addProperty("uptime", info.getUptime());
+                backendStatus.addProperty("uptimeFormatted", formatUptime(info.getUptime()));
+
+                JsonObject backendTps = info.getTps();
+                if (backendTps != null) {
+                    backendStatus.add("tps", backendTps);
+                }
+
+                JsonObject backendMemory = info.getMemory();
+                if (backendMemory != null) {
+                    backendStatus.add("memory", backendMemory);
+                }
+
+                backends.add(backendStatus);
+            }
+
+            data.add("backends", backends);
+        }
+
         return Response.success(data);
     }
 
     /**
      * 获取TPS
+     * Velocity: proxy itself has no TPS, returns backend TPS list
+     * Backend: returns local TPS
      */
     private Response getServerTps(FullHttpRequest request) {
         if (request.method() != HttpMethod.GET) {
@@ -125,6 +196,28 @@ public class ServerController {
             result.addProperty("15m", Math.round(tps[2] * 100.0) / 100.0);
             return result;
         });
+
+        // Proxy mode: always include backend TPS
+        if (proxyBridge != null) {
+            JsonObject result = (data != null) ? data : new JsonObject();
+            JsonArray backends = new JsonArray();
+
+            for (Map.Entry<String, BackendServerInfo> entry : proxyBridge.getBackendServers().entrySet()) {
+                BackendServerInfo info = entry.getValue();
+                if (!info.isAuthenticated()) continue;
+
+                JsonObject backendTps = info.getTps();
+                if (backendTps != null) {
+                    JsonObject backendEntry = new JsonObject();
+                    backendEntry.addProperty("name", info.getServerName());
+                    backendEntry.add("tps", backendTps);
+                    backends.add(backendEntry);
+                }
+            }
+
+            result.add("backends", backends);
+            return Response.success(result);
+        }
 
         if (data == null) {
             return Response.error(ErrorCode.FEATURE_DISABLED, "当前平台不支持TPS查询");
