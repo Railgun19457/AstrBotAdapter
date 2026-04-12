@@ -28,18 +28,11 @@ public class BukkitProxyPlayerListener implements Listener {
 
         Player player = event.getPlayer();
 
-        // Try immediate authentication when first player joins (plugin messages need a player connection)
-        if (!proxyClient.isAuthenticated()) {
-            proxyClient.sendAuthRequest();
+        proxyClient.triggerFastBootstrap();
 
-            // If auth succeeds quickly, report join immediately in current tick.
-            if (proxyClient.isAuthenticated()) {
-                reportJoinAndData(player);
-            }
-            return;
+        if (proxyClient.isAuthenticated()) {
+            reportJoinAndData(player);
         }
-
-        reportJoinAndData(player);
     }
 
     @EventHandler(priority = EventPriority.MONITOR)

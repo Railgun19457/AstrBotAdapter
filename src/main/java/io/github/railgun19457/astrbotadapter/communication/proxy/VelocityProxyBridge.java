@@ -23,6 +23,8 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.util.Collection;
 import java.util.Map;
@@ -286,6 +288,13 @@ public class VelocityProxyBridge implements ProxyBridgeProvider {
         aiChat.addProperty("showThinking", config.isAiShowThinking());
         aiChat.addProperty("timeout", config.getAiTimeoutSeconds());
 
+        String configHash = buildConfigHash(aiChat);
+        long configVersion = Integer.toUnsignedLong(configHash.hashCode());
+        long updatedAt = System.currentTimeMillis();
+
+        data.addProperty("configVersion", configVersion);
+        data.addProperty("configHash", configHash);
+        data.addProperty("updatedAt", updatedAt);
         data.add("aiChat", aiChat);
 
         ProxyMessage msg = ProxyMessage.builder()
@@ -294,7 +303,22 @@ public class VelocityProxyBridge implements ProxyBridgeProvider {
                 .build();
 
         sendToBackend(serverConn, msg);
-        logger.info("已向后端服务器同步AI聊天配置");
+        logger.info("已向后端服务器同步AI聊天配置, version=" + configVersion);
+    }
+
+    private String buildConfigHash(JsonObject aiChat) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest(JsonUtil.toJsonCompact(aiChat).getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder("sha256-");
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (NoSuchAlgorithmException e) {
+            logger.warning("SHA-256不可用，回退到JSON哈希");
+            return "hash-" + Integer.toUnsignedString(JsonUtil.toJsonCompact(aiChat).hashCode());
+        }
     }
 
     private void sendAuthResponse(ServerConnection serverConn, boolean success, String message) {

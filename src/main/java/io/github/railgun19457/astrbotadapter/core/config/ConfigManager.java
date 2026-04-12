@@ -401,6 +401,56 @@ public class ConfigManager {
         if (proxyBridge != null) {
             config.setProxyBridgeEnabled(getBoolean(proxyBridge, "enabled", false));
         }
+
+        Map<String, Object> configSync = getMap(yaml, "configSync");
+        if (configSync != null) {
+            config.setSyncedConfigVersion(getLong(configSync, "version", 0L));
+            config.setSyncedConfigHash(getString(configSync, "hash", ""));
+            config.setSyncedConfigUpdatedAt(getLong(configSync, "updatedAt", 0L));
+        }
+    }
+
+    /**
+     * Persist synced aiChat settings and sync metadata to config.yml.
+     * This intentionally writes through YAML mapping to keep values durable across restarts.
+     */
+    public synchronized void persistSyncedAiChatConfig() {
+        Path configFile = dataFolder.resolve(CONFIG_FILE_NAME);
+
+        try {
+            if (rawConfig == null) {
+                rawConfig = Files.exists(configFile)
+                        ? loadYaml(configFile)
+                        : new java.util.LinkedHashMap<>();
+            }
+
+            Map<String, Object> aiChat = ensureMap(rawConfig, "aiChat");
+
+            Map<String, Object> group = ensureMap(aiChat, "group");
+            group.put("enabled", config.isGroupChatEnabled());
+            group.put("prefix", config.getGroupChatPrefix());
+
+            Map<String, Object> priv = ensureMap(aiChat, "private");
+            priv.put("enabled", config.isPrivateChatEnabled());
+            priv.put("prefix", config.getPrivateChatPrefix());
+            priv.put("echoFormat", config.getPrivateChatEchoFormat());
+
+            aiChat.put("responseFormat", config.getAiResponseFormat());
+            aiChat.put("thinkingMessage", config.getAiThinkingMessage());
+            aiChat.put("showThinking", config.isAiShowThinking());
+            aiChat.put("timeout", config.getAiTimeoutSeconds());
+
+            Map<String, Object> configSync = ensureMap(rawConfig, "configSync");
+            configSync.put("version", config.getSyncedConfigVersion());
+            configSync.put("hash", config.getSyncedConfigHash());
+            configSync.put("updatedAt", config.getSyncedConfigUpdatedAt());
+
+            try (BufferedWriter writer = Files.newBufferedWriter(configFile, StandardCharsets.UTF_8)) {
+                writeYaml(writer, rawConfig);
+            }
+        } catch (Exception e) {
+            logger.warning("持久化同步配置失败: " + e.getMessage());
+        }
     }
 
     // ===== YAML Tools =====
@@ -505,6 +555,17 @@ public class ConfigManager {
         return null;
     }
 
+    private long getLong(Map<String, Object> map, String key, long def) {
+        Object value = map.get(key);
+        if (value instanceof Number) return ((Number) value).longValue();
+        if (value instanceof String) {
+            try {
+                return Long.parseLong((String) value);
+            } catch (NumberFormatException ignored) {}
+        }
+        return def;
+    }
+
     private List<String> getStringList(Map<String, Object> map, String key) {
         Object value = map.get(key);
         if (value instanceof List) {
@@ -516,5 +577,16 @@ public class ConfigManager {
             return result;
         }
         return new java.util.ArrayList<>();
+    }
+
+    @SuppressWarnings("unchecked")
+    private Map<String, Object> ensureMap(Map<String, Object> parent, String key) {
+        Object value = parent.get(key);
+        if (value instanceof Map) {
+            return (Map<String, Object>) value;
+        }
+        Map<String, Object> created = new java.util.LinkedHashMap<>();
+        parent.put(key, created);
+        return created;
     }
 }

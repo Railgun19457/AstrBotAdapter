@@ -40,6 +40,14 @@ public interface CommonServer {
     }
 
     /**
+     * 获取服务器MSPT（毫秒每tick）
+     * @return MSPT，平台不支持时返回null
+     */
+    default Double getMspt() {
+        return null;
+    }
+
+    /**
      * 获取服务器运行时间（毫秒）
      */
     long getUptime();

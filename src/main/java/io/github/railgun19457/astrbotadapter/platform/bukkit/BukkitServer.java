@@ -53,6 +53,24 @@ public class BukkitServer implements CommonServer {
     }
 
     @Override
+    public Double getMspt() {
+        try {
+            Object value = server.getClass().getMethod("getAverageTickTime").invoke(server);
+            if (value instanceof Number) {
+                return ((Number) value).doubleValue();
+            }
+        } catch (Exception ignored) {
+            // Fallback below
+        }
+
+        double[] tps = getTps();
+        if (tps != null && tps.length > 0 && tps[0] > 0.01D) {
+            return Math.round((1000.0D / tps[0]) * 100.0D) / 100.0D;
+        }
+        return null;
+    }
+
+    @Override
     public long getUptime() {
         return System.currentTimeMillis() - startTime;
     }

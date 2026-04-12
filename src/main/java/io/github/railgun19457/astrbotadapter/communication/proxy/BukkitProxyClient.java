@@ -2,6 +2,7 @@ package io.github.railgun19457.astrbotadapter.communication.proxy;
 
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+import io.github.railgun19457.astrbotadapter.core.config.ConfigManager;
 import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
 import io.github.railgun19457.astrbotadapter.core.util.JsonUtil;
 import io.github.railgun19457.astrbotadapter.platform.PlatformAdapter;
@@ -31,6 +32,7 @@ import java.util.logging.Logger;
 public class BukkitProxyClient implements PluginMessageListener {
 
     private final JavaPlugin plugin;
+    private final ConfigManager configManager;
     private final PluginConfig config;
     private final PlatformAdapter platformAdapter;
     private final Logger logger;
@@ -39,13 +41,20 @@ public class BukkitProxyClient implements PluginMessageListener {
     private Consumer<ProxyMessage> messageHandler;
     private long lastNoPlayerAuthLogTime = 0L;
     private static final long NO_PLAYER_AUTH_LOG_INTERVAL_MS = 60_000L;
+    private static final long FAST_AUTH_RETRY_INTERVAL_TICKS = 20L;
+    private static final int FAST_AUTH_RETRY_MAX_ATTEMPTS = 20;
+
+    private volatile boolean fastAuthRetryActive = false;
+    private volatile int fastAuthRetryTaskId = -1;
+    private volatile int fastAuthRetryAttempt = 0;
 
     // Pending command results keyed by request ID
     private final ConcurrentHashMap<String, Consumer<JsonObject>> pendingCallbacks = new ConcurrentHashMap<>();
 
-    public BukkitProxyClient(JavaPlugin plugin, PluginConfig config,
+    public BukkitProxyClient(JavaPlugin plugin, ConfigManager configManager, PluginConfig config,
                              PlatformAdapter platformAdapter, Logger logger) {
         this.plugin = plugin;
+        this.configManager = configManager;
         this.config = config;
         this.platformAdapter = platformAdapter;
         this.logger = logger;
@@ -72,8 +81,64 @@ public class BukkitProxyClient implements PluginMessageListener {
     public void shutdown() {
         Bukkit.getMessenger().unregisterOutgoingPluginChannel(plugin, ProxyChannel.CHANNEL_ID);
         Bukkit.getMessenger().unregisterIncomingPluginChannel(plugin, ProxyChannel.CHANNEL_ID);
+        stopFastAuthRetry();
         authenticated = false;
         logger.info("代理模式Plugin Messaging Channel已注销");
+    }
+
+    /**
+     * Trigger event-driven bootstrap: immediate auth attempt + short retry window.
+     */
+    public void triggerFastBootstrap() {
+        if (authenticated) {
+            reportServerInfo();
+            return;
+        }
+
+        if (fastAuthRetryActive) {
+            return;
+        }
+
+        fastAuthRetryActive = true;
+        fastAuthRetryAttempt = 0;
+
+        fastAuthRetryTaskId = platformAdapter.getScheduler().runTimer(() -> {
+            if (!fastAuthRetryActive) {
+                return;
+            }
+
+            fastAuthRetryAttempt++;
+
+            if (authenticated) {
+                stopFastAuthRetry();
+                return;
+            }
+
+            sendAuthRequest();
+
+            if (fastAuthRetryAttempt >= FAST_AUTH_RETRY_MAX_ATTEMPTS) {
+                logger.info("快速认证重试窗口结束，回退到定时心跳认证");
+                stopFastAuthRetry();
+            }
+        }, 0L, FAST_AUTH_RETRY_INTERVAL_TICKS);
+    }
+
+    private void stopFastAuthRetry() {
+        fastAuthRetryActive = false;
+        fastAuthRetryAttempt = 0;
+        if (fastAuthRetryTaskId > 0) {
+            platformAdapter.getScheduler().cancelTask(fastAuthRetryTaskId);
+        }
+        fastAuthRetryTaskId = -1;
+    }
+
+    private void reportOnlinePlayersSnapshot(boolean includeJoinEvent) {
+        for (CommonPlayer player : platformAdapter.getOnlinePlayers()) {
+            if (includeJoinEvent) {
+                reportPlayerJoin(player.getUniqueId(), player.getName(), player.getDisplayName());
+            }
+            reportPlayerData(player);
+        }
     }
 
     /**
@@ -128,6 +193,11 @@ public class BukkitProxyClient implements PluginMessageListener {
         data.addProperty("onlineCount", platformAdapter.getOnlinePlayerCount());
         data.addProperty("maxPlayers", platformAdapter.getMaxPlayers());
         data.addProperty("uptime", platformAdapter.getServerUptime());
+
+        Double mspt = platformAdapter.getServer().getMspt();
+        if (mspt != null) {
+            data.addProperty("mspt", Math.round(mspt * 100.0D) / 100.0D);
+        }
 
         // TPS (Bukkit-specific)
         try {
@@ -397,6 +467,8 @@ public class BukkitProxyClient implements PluginMessageListener {
             logger.info("代理端认证成功: " + message);
             // Send initial server info after authentication
             reportServerInfo();
+            reportOnlinePlayersSnapshot(true);
+            stopFastAuthRetry();
         } else {
             authenticated = false;
             logger.severe("代理端认证失败: " + message);
@@ -417,6 +489,21 @@ public class BukkitProxyClient implements PluginMessageListener {
     private void handleSyncConfig(ProxyMessage msg) {
         JsonObject data = msg.getData();
         if (data == null) return;
+
+        long incomingVersion = data.has("configVersion") ? data.get("configVersion").getAsLong() : 0L;
+        String incomingHash = data.has("configHash") ? data.get("configHash").getAsString() : "";
+        long incomingUpdatedAt = data.has("updatedAt") ? data.get("updatedAt").getAsLong() : System.currentTimeMillis();
+
+        boolean hasVersion = incomingVersion > 0;
+        boolean hasHash = incomingHash != null && !incomingHash.isBlank();
+
+        boolean sameVersion = hasVersion && incomingVersion == config.getSyncedConfigVersion();
+        boolean sameHash = hasHash && incomingHash.equals(config.getSyncedConfigHash());
+
+        if ((hasVersion || hasHash) && (sameVersion || sameHash)) {
+            logger.fine("收到重复配置版本，跳过应用: version=" + incomingVersion + ", hash=" + incomingHash);
+            return;
+        }
 
         JsonObject aiChat = data.has("aiChat") && data.get("aiChat").isJsonObject()
                 ? data.getAsJsonObject("aiChat") : null;
@@ -443,7 +530,17 @@ public class BukkitProxyClient implements PluginMessageListener {
         if (aiChat.has("showThinking")) config.setAiShowThinking(aiChat.get("showThinking").getAsBoolean());
         if (aiChat.has("timeout")) config.setAiTimeoutSeconds(aiChat.get("timeout").getAsInt());
 
-        logger.info("已从代理端同步AI聊天配置");
+        if (hasVersion) {
+            config.setSyncedConfigVersion(incomingVersion);
+        }
+        if (hasHash) {
+            config.setSyncedConfigHash(incomingHash);
+        }
+        config.setSyncedConfigUpdatedAt(incomingUpdatedAt);
+
+        configManager.persistSyncedAiChatConfig();
+
+        logger.info("已从代理端同步AI聊天配置, version=" + config.getSyncedConfigVersion());
     }
 
     private void handleExecuteCommand(ProxyMessage msg) {

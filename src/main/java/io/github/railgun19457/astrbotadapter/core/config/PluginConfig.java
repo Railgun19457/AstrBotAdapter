@@ -72,6 +72,11 @@ public class PluginConfig {
     // 代理桥接配置 (Velocity代理端)
     private boolean proxyBridgeEnabled = false; // Whether proxy bridge is enabled on Velocity
 
+    // Config sync metadata (backend)
+    private long syncedConfigVersion = 0L;
+    private String syncedConfigHash = "";
+    private long syncedConfigUpdatedAt = 0L;
+
     // 更新检查
     private boolean updateCheckEnabled = true;
     private boolean updateNotifyOps = true;
@@ -396,5 +401,29 @@ public class PluginConfig {
 
     public void setProxyBridgeEnabled(boolean proxyBridgeEnabled) {
         this.proxyBridgeEnabled = proxyBridgeEnabled;
+    }
+
+    public long getSyncedConfigVersion() {
+        return syncedConfigVersion;
+    }
+
+    public void setSyncedConfigVersion(long syncedConfigVersion) {
+        this.syncedConfigVersion = syncedConfigVersion;
+    }
+
+    public String getSyncedConfigHash() {
+        return syncedConfigHash;
+    }
+
+    public void setSyncedConfigHash(String syncedConfigHash) {
+        this.syncedConfigHash = syncedConfigHash;
+    }
+
+    public long getSyncedConfigUpdatedAt() {
+        return syncedConfigUpdatedAt;
+    }
+
+    public void setSyncedConfigUpdatedAt(long syncedConfigUpdatedAt) {
+        this.syncedConfigUpdatedAt = syncedConfigUpdatedAt;
     }
 }

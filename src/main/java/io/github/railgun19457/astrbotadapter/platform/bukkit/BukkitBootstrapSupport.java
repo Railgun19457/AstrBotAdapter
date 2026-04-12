@@ -45,6 +45,7 @@ public final class BukkitBootstrapSupport {
     public static BukkitProxyClient initializeProxyMode(JavaPlugin javaPlugin, AstrbotAdapterPlugin plugin) {
         BukkitProxyClient proxyClient = new BukkitProxyClient(
                 javaPlugin,
+            plugin.getConfigManager(),
                 plugin.getConfigManager().getConfig(),
                 plugin.getPlatformAdapter(),
                 javaPlugin.getLogger()

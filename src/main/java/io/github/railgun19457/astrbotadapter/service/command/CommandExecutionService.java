@@ -121,8 +121,9 @@ public final class CommandExecutionService {
                 );
             }
 
-            List<String> logs = CommandFilter.collectCommandLogs(platformAdapter, startTime, endTime);
-            return ExecutionResult.success(command, startTime, endTime, logs);
+            // Avoid sampling global logs here: they are often polluted by plugin self-logs
+            // and can be misleading for command execution output.
+            return ExecutionResult.success(command, startTime, endTime, List.of());
         } catch (Exception e) {
             endTime = System.currentTimeMillis();
             if (logger != null) {

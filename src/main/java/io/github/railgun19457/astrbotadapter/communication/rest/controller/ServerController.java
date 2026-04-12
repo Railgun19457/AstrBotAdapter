@@ -1,6 +1,8 @@
 package io.github.railgun19457.astrbotadapter.communication.rest.controller;
 
 import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Response;
@@ -38,6 +40,7 @@ public class ServerController {
         dispatcher.registerRoute("/api/v1/server/info", this::getServerInfo);
         dispatcher.registerRoute("/api/v1/server/status", this::getServerStatus);
         dispatcher.registerRoute("/api/v1/server/tps", this::getServerTps);
+        dispatcher.registerRoute("/api/v1/server/mspt", this::getServerMspt);
     }
 
     /**
@@ -50,45 +53,7 @@ public class ServerController {
             return Response.error(ErrorCode.REQUEST_PARAM_ERROR, "仅支持GET请求");
         }
 
-        JsonObject data = runOnServerThread(() -> {
-            CommonServer server = platformAdapter.getServer();
-
-            JsonObject result = new JsonObject();
-            result.addProperty("name", server.getName());
-            result.addProperty("platform", platformAdapter.getPlatformType().getDisplayName());
-            result.addProperty("version", server.getVersion());
-            result.addProperty("motd", server.getMotd());
-            result.addProperty("maxPlayers", server.getMaxPlayers());
-            result.addProperty("onlinePlayers", server.getOnlinePlayerCount());
-            result.addProperty("port", server.getPort());
-            return result;
-        });
-
-        // Proxy mode: append backend server list
-        if (proxyBridge != null) {
-            JsonArray backends = new JsonArray();
-            int totalBackendPlayers = 0;
-            int totalBackendMaxPlayers = 0;
-
-            for (Map.Entry<String, BackendServerInfo> entry : proxyBridge.getBackendServers().entrySet()) {
-                BackendServerInfo info = entry.getValue();
-                if (!info.isAuthenticated()) continue;
-
-                backends.add(info.toJson());
-                totalBackendPlayers += info.getOnlineCount();
-                totalBackendMaxPlayers += info.getMaxPlayers();
-            }
-
-            data.add("backends", backends);
-            data.addProperty("backendCount", backends.size());
-
-            // Aggregated totals across all backends
-            JsonObject aggregate = new JsonObject();
-            aggregate.addProperty("totalOnlinePlayers", totalBackendPlayers);
-            aggregate.addProperty("totalMaxPlayers", totalBackendMaxPlayers);
-            data.add("aggregate", aggregate);
-        }
-
+        JsonObject data = runOnServerThread(this::buildServerInfoData);
         return Response.success(data);
     }
 
@@ -102,73 +67,7 @@ public class ServerController {
             return Response.error(ErrorCode.REQUEST_PARAM_ERROR, "仅支持GET请求");
         }
 
-        JsonObject data = runOnServerThread(() -> {
-            CommonServer server = platformAdapter.getServer();
-
-            JsonObject result = new JsonObject();
-            result.addProperty("online", true);
-            result.addProperty("onlinePlayers", server.getOnlinePlayerCount());
-            result.addProperty("maxPlayers", server.getMaxPlayers());
-
-            long uptime = server.getUptime();
-            result.addProperty("uptime", uptime);
-            result.addProperty("uptimeFormatted", formatUptime(uptime));
-
-            // TPS（仅后端服务器有效）
-            double[] tps = server.getTps();
-            if (tps != null && tps.length >= 3) {
-                JsonObject tpsData = new JsonObject();
-                tpsData.addProperty("1m", Math.round(tps[0] * 100.0) / 100.0);
-                tpsData.addProperty("5m", Math.round(tps[1] * 100.0) / 100.0);
-                tpsData.addProperty("15m", Math.round(tps[2] * 100.0) / 100.0);
-                result.add("tps", tpsData);
-            }
-
-            return result;
-        });
-
-        // 内存使用
-        Runtime runtime = Runtime.getRuntime();
-        JsonObject memory = new JsonObject();
-        memory.addProperty("used", (runtime.totalMemory() - runtime.freeMemory()) / 1024 / 1024);
-        memory.addProperty("total", runtime.totalMemory() / 1024 / 1024);
-        memory.addProperty("max", runtime.maxMemory() / 1024 / 1024);
-        data.add("memory", memory);
-
-        // Proxy mode: append backend statuses
-        if (proxyBridge != null) {
-            JsonArray backends = new JsonArray();
-
-            for (Map.Entry<String, BackendServerInfo> entry : proxyBridge.getBackendServers().entrySet()) {
-                BackendServerInfo info = entry.getValue();
-                if (!info.isAuthenticated()) continue;
-
-                JsonObject backendStatus = new JsonObject();
-                backendStatus.addProperty("name", info.getServerName());
-                backendStatus.addProperty("platform", info.getPlatform());
-                backendStatus.addProperty("version", info.getVersion());
-                backendStatus.addProperty("online", true);
-                backendStatus.addProperty("onlinePlayers", info.getOnlineCount());
-                backendStatus.addProperty("maxPlayers", info.getMaxPlayers());
-                backendStatus.addProperty("uptime", info.getUptime());
-                backendStatus.addProperty("uptimeFormatted", formatUptime(info.getUptime()));
-
-                JsonObject backendTps = info.getTps();
-                if (backendTps != null) {
-                    backendStatus.add("tps", backendTps);
-                }
-
-                JsonObject backendMemory = info.getMemory();
-                if (backendMemory != null) {
-                    backendStatus.add("memory", backendMemory);
-                }
-
-                backends.add(backendStatus);
-            }
-
-            data.add("backends", backends);
-        }
-
+        JsonObject data = runOnServerThread(this::buildServerStatusData);
         return Response.success(data);
     }
 
@@ -182,48 +81,289 @@ public class ServerController {
             return Response.error(ErrorCode.REQUEST_PARAM_ERROR, "仅支持GET请求");
         }
 
-        JsonObject data = runOnServerThread(() -> {
-            CommonServer server = platformAdapter.getServer();
-            double[] tps = server.getTps();
+        JsonObject data = runOnServerThread(this::buildServerTpsData);
+        return Response.success(data);
+    }
 
-            if (tps == null) {
-                return null;
-            }
+    /**
+     * 获取MSPT
+     */
+    private Response getServerMspt(FullHttpRequest request) {
+        if (request.method() != HttpMethod.GET) {
+            return Response.error(ErrorCode.REQUEST_PARAM_ERROR, "仅支持GET请求");
+        }
 
-            JsonObject result = new JsonObject();
-            result.addProperty("1m", Math.round(tps[0] * 100.0) / 100.0);
-            result.addProperty("5m", Math.round(tps[1] * 100.0) / 100.0);
-            result.addProperty("15m", Math.round(tps[2] * 100.0) / 100.0);
-            return result;
-        });
+        JsonObject data = runOnServerThread(this::buildServerMsptData);
+        return Response.success(data);
+    }
 
-        // Proxy mode: always include backend TPS
+    private JsonObject buildServerInfoData() {
+        CommonServer server = platformAdapter.getServer();
+
+        JsonArray servers = new JsonArray();
+        JsonObject local = new JsonObject();
+        local.addProperty("name", server.getName());
+        local.addProperty("platform", platformAdapter.getPlatformType().getDisplayName());
+        local.addProperty("version", server.getVersion());
+        local.addProperty("motd", server.getMotd());
+        local.addProperty("onlinePlayers", server.getOnlinePlayerCount());
+        local.addProperty("maxPlayers", server.getMaxPlayers());
+        local.addProperty("port", server.getPort());
+        local.addProperty("scope", platformAdapter.getPlatformType().isProxy() ? "proxy" : "local");
+        servers.add(local);
+
+        int totalOnline = server.getOnlinePlayerCount();
+        int totalMax = server.getMaxPlayers();
+        int backendCount = 0;
+
         if (proxyBridge != null) {
-            JsonObject result = (data != null) ? data : new JsonObject();
-            JsonArray backends = new JsonArray();
-
             for (Map.Entry<String, BackendServerInfo> entry : proxyBridge.getBackendServers().entrySet()) {
                 BackendServerInfo info = entry.getValue();
-                if (!info.isAuthenticated()) continue;
-
-                JsonObject backendTps = info.getTps();
-                if (backendTps != null) {
-                    JsonObject backendEntry = new JsonObject();
-                    backendEntry.addProperty("name", info.getServerName());
-                    backendEntry.add("tps", backendTps);
-                    backends.add(backendEntry);
+                if (info == null || !info.isAuthenticated()) {
+                    continue;
                 }
+
+                JsonObject backend = new JsonObject();
+                backend.addProperty("name", info.getServerName());
+                backend.addProperty("platform", info.getPlatform());
+                backend.addProperty("version", info.getVersion());
+                backend.addProperty("motd", info.getMotd());
+                backend.addProperty("onlinePlayers", info.getOnlineCount());
+                backend.addProperty("maxPlayers", info.getMaxPlayers());
+                backend.add("port", JsonNull.INSTANCE);
+                backend.addProperty("scope", "backend");
+                servers.add(backend);
+
+                totalOnline += info.getOnlineCount();
+                totalMax += info.getMaxPlayers();
+                backendCount++;
             }
-
-            result.add("backends", backends);
-            return Response.success(result);
         }
 
-        if (data == null) {
-            return Response.error(ErrorCode.FEATURE_DISABLED, "当前平台不支持TPS查询");
+        JsonObject aggregate = new JsonObject();
+        aggregate.addProperty("totalOnlinePlayers", totalOnline);
+        aggregate.addProperty("totalMaxPlayers", totalMax);
+        aggregate.addProperty("backendCount", backendCount);
+
+        JsonObject data = new JsonObject();
+        data.add("servers", servers);
+        data.add("aggregate", aggregate);
+        return data;
+    }
+
+    private JsonObject buildServerStatusData() {
+        CommonServer server = platformAdapter.getServer();
+
+        JsonArray servers = new JsonArray();
+        JsonObject local = new JsonObject();
+        local.addProperty("name", server.getName());
+        local.addProperty("online", true);
+        local.addProperty("onlinePlayers", server.getOnlinePlayerCount());
+        local.addProperty("maxPlayers", server.getMaxPlayers());
+        local.addProperty("uptime", server.getUptime());
+        local.addProperty("uptimeFormatted", formatUptime(server.getUptime()));
+        local.add("tps", normalizeLocalTps(server.getTps()));
+        local.add("mspt", normalizeMspt(server.getMspt()));
+        local.add("memory", buildLocalMemory());
+        local.addProperty("scope", platformAdapter.getPlatformType().isProxy() ? "proxy" : "local");
+        servers.add(local);
+
+        int totalOnline = server.getOnlinePlayerCount();
+        int totalMax = server.getMaxPlayers();
+        int backendCount = 0;
+
+        if (proxyBridge != null) {
+            for (Map.Entry<String, BackendServerInfo> entry : proxyBridge.getBackendServers().entrySet()) {
+                BackendServerInfo info = entry.getValue();
+                if (info == null || !info.isAuthenticated()) {
+                    continue;
+                }
+
+                JsonObject backend = new JsonObject();
+                backend.addProperty("name", info.getServerName());
+                backend.addProperty("online", true);
+                backend.addProperty("onlinePlayers", info.getOnlineCount());
+                backend.addProperty("maxPlayers", info.getMaxPlayers());
+                backend.addProperty("uptime", info.getUptime());
+                backend.addProperty("uptimeFormatted", formatUptime(info.getUptime()));
+                backend.add("tps", normalizeBackendTps(info.getTps()));
+                backend.add("mspt", normalizeMspt(info.getMspt()));
+                backend.add("memory", normalizeMemory(info.getMemory()));
+                backend.addProperty("scope", "backend");
+                servers.add(backend);
+
+                totalOnline += info.getOnlineCount();
+                totalMax += info.getMaxPlayers();
+                backendCount++;
+            }
         }
 
-        return Response.success(data);
+        JsonObject aggregate = new JsonObject();
+        aggregate.addProperty("totalOnlinePlayers", totalOnline);
+        aggregate.addProperty("totalMaxPlayers", totalMax);
+        aggregate.addProperty("backendCount", backendCount);
+
+        JsonObject data = new JsonObject();
+        data.add("servers", servers);
+        data.add("aggregate", aggregate);
+        return data;
+    }
+
+    private JsonObject buildServerTpsData() {
+        CommonServer server = platformAdapter.getServer();
+        JsonArray servers = new JsonArray();
+
+        JsonObject local = new JsonObject();
+        local.addProperty("name", server.getName());
+        local.add("tps", normalizeLocalTps(server.getTps()));
+        local.addProperty("scope", platformAdapter.getPlatformType().isProxy() ? "proxy" : "local");
+        servers.add(local);
+
+        if (proxyBridge != null) {
+            for (Map.Entry<String, BackendServerInfo> entry : proxyBridge.getBackendServers().entrySet()) {
+                BackendServerInfo info = entry.getValue();
+                if (info == null || !info.isAuthenticated()) {
+                    continue;
+                }
+
+                JsonObject backend = new JsonObject();
+                backend.addProperty("name", info.getServerName());
+                backend.add("tps", normalizeBackendTps(info.getTps()));
+                backend.addProperty("scope", "backend");
+                servers.add(backend);
+            }
+        }
+
+        JsonObject data = new JsonObject();
+        data.add("servers", servers);
+        return data;
+    }
+
+    private JsonObject buildServerMsptData() {
+        CommonServer server = platformAdapter.getServer();
+        JsonArray servers = new JsonArray();
+
+        JsonObject local = new JsonObject();
+        local.addProperty("name", server.getName());
+        local.add("mspt", normalizeMspt(server.getMspt()));
+        local.addProperty("scope", platformAdapter.getPlatformType().isProxy() ? "proxy" : "local");
+        servers.add(local);
+
+        if (proxyBridge != null) {
+            for (Map.Entry<String, BackendServerInfo> entry : proxyBridge.getBackendServers().entrySet()) {
+                BackendServerInfo info = entry.getValue();
+                if (info == null || !info.isAuthenticated()) {
+                    continue;
+                }
+
+                JsonObject backend = new JsonObject();
+                backend.addProperty("name", info.getServerName());
+                backend.add("mspt", normalizeMspt(info.getMspt()));
+                backend.addProperty("scope", "backend");
+                servers.add(backend);
+            }
+        }
+
+        JsonObject data = new JsonObject();
+        data.add("servers", servers);
+        return data;
+    }
+
+    private JsonObject buildLocalMemory() {
+        Runtime runtime = Runtime.getRuntime();
+        JsonObject memory = new JsonObject();
+        memory.addProperty("used", (runtime.totalMemory() - runtime.freeMemory()) / 1024 / 1024);
+        memory.addProperty("total", runtime.totalMemory() / 1024 / 1024);
+        memory.addProperty("max", runtime.maxMemory() / 1024 / 1024);
+        return memory;
+    }
+
+    private JsonElement normalizeMemory(JsonObject rawMemory) {
+        if (rawMemory == null) {
+            return JsonNull.INSTANCE;
+        }
+
+        JsonObject normalized = new JsonObject();
+        if (rawMemory.has("used")) normalized.add("used", rawMemory.get("used"));
+        if (rawMemory.has("total")) {
+            normalized.add("total", rawMemory.get("total"));
+        } else if (rawMemory.has("used") && rawMemory.has("free")) {
+            try {
+                double total = rawMemory.get("used").getAsDouble() + rawMemory.get("free").getAsDouble();
+                normalized.addProperty("total", round2(total));
+            } catch (Exception e) {
+                normalized.add("total", JsonNull.INSTANCE);
+            }
+        } else {
+            normalized.add("total", JsonNull.INSTANCE);
+        }
+        if (rawMemory.has("max")) normalized.add("max", rawMemory.get("max"));
+        return normalized;
+    }
+
+    private JsonElement normalizeLocalTps(double[] tps) {
+        if (tps == null || tps.length < 3) {
+            return JsonNull.INSTANCE;
+        }
+        JsonObject json = new JsonObject();
+        json.addProperty("1m", round2(tps[0]));
+        json.addProperty("5m", round2(tps[1]));
+        json.addProperty("15m", round2(tps[2]));
+        return json;
+    }
+
+    private JsonElement normalizeBackendTps(JsonObject tps) {
+        if (tps == null) {
+            return JsonNull.INSTANCE;
+        }
+        JsonObject json = new JsonObject();
+        addNumberWithFallback(tps, json, "1m", "tps1m");
+        addNumberWithFallback(tps, json, "5m", "tps5m");
+        addNumberWithFallback(tps, json, "15m", "tps15m");
+        if (!json.has("1m") && !json.has("5m") && !json.has("15m")) {
+            return JsonNull.INSTANCE;
+        }
+        return json;
+    }
+
+    private JsonElement normalizeMspt(Double mspt) {
+        if (mspt == null) {
+            return JsonNull.INSTANCE;
+        }
+        return new com.google.gson.JsonPrimitive(round2(mspt));
+    }
+
+    private void addNumberWithFallback(JsonObject source, JsonObject target,
+                                       String preferredKey, String fallbackKey) {
+        if (source.has(preferredKey) && !source.get(preferredKey).isJsonNull()) {
+            target.add(preferredKey, source.get(preferredKey));
+            return;
+        }
+        if (source.has(fallbackKey) && !source.get(fallbackKey).isJsonNull()) {
+            try {
+                target.addProperty(preferredKey, round2(source.get(fallbackKey).getAsDouble()));
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    private double round2(double value) {
+        return Math.round(value * 100.0D) / 100.0D;
+    }
+
+    private String formatUptime(long millis) {
+        long seconds = millis / 1000;
+        long minutes = seconds / 60;
+        long hours = minutes / 60;
+        long days = hours / 24;
+
+        if (days > 0) {
+            return String.format("%d天 %d小时 %d分钟", days, hours % 24, minutes % 60);
+        }
+        if (hours > 0) {
+            return String.format("%d小时 %d分钟", hours, minutes % 60);
+        }
+        return String.format("%d分钟", minutes);
     }
 
     private <T> T runOnServerThread(Supplier<T> supplier) {
@@ -247,18 +387,4 @@ public class ServerController {
         }
     }
 
-    private String formatUptime(long millis) {
-        long seconds = millis / 1000;
-        long minutes = seconds / 60;
-        long hours = minutes / 60;
-        long days = hours / 24;
-
-        if (days > 0) {
-            return String.format("%d天 %d小时 %d分钟", days, hours % 24, minutes % 60);
-        } else if (hours > 0) {
-            return String.format("%d小时 %d分钟", hours, minutes % 60);
-        } else {
-            return String.format("%d分钟", minutes);
-        }
-    }
 }

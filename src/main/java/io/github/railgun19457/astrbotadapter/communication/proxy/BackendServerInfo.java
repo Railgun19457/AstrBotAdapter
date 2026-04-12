@@ -21,6 +21,7 @@ public class BackendServerInfo {
     private volatile int onlineCount = 0;
     private volatile int maxPlayers = 0;
     private volatile long uptime = 0;
+    private volatile Double mspt;
     private volatile JsonObject tps;
     private volatile JsonObject memory;
 
@@ -44,6 +45,7 @@ public class BackendServerInfo {
         if (data.has("onlineCount")) this.onlineCount = data.get("onlineCount").getAsInt();
         if (data.has("maxPlayers")) this.maxPlayers = data.get("maxPlayers").getAsInt();
         if (data.has("uptime")) this.uptime = data.get("uptime").getAsLong();
+        if (data.has("mspt") && !data.get("mspt").isJsonNull()) this.mspt = data.get("mspt").getAsDouble();
         if (data.has("tps")) this.tps = data.getAsJsonObject("tps");
         if (data.has("memory")) this.memory = data.getAsJsonObject("memory");
 
@@ -84,6 +86,7 @@ public class BackendServerInfo {
         json.addProperty("onlineCount", onlineCount);
         json.addProperty("maxPlayers", maxPlayers);
         json.addProperty("uptime", uptime);
+        if (mspt != null) json.addProperty("mspt", mspt);
         json.addProperty("authenticated", authenticated);
         if (tps != null) json.add("tps", tps);
         if (memory != null) json.add("memory", memory);
@@ -126,6 +129,10 @@ public class BackendServerInfo {
 
     public long getUptime() {
         return uptime;
+    }
+
+    public Double getMspt() {
+        return mspt;
     }
 
     public JsonObject getTps() {

@@ -403,201 +403,181 @@ ws://<host>:<port>/ws?token=<auth_token>
 - **认证方式:** Header `Authorization: Bearer <token>`
 - **Content-Type:** `application/json`
 
-### 3.2 API 列表
+### 3.2 返回约定
 
-| 方法 | 路径                   | 说明                 |
-| ---- | ---------------------- | -------------------- |
-| GET  | `/server/info`         | 获取服务器信息       |
-| GET  | `/server/status`       | 获取服务器状态       |
-| GET  | `/server/tps`          | 获取TPS信息          |
-| GET  | `/players`             | 获取在线玩家列表     |
-| GET  | `/players/{name}`      | 获取指定玩家详情     |
-| POST | `/command/execute`     | 执行指令             |
-| GET  | `/logs`                | 查询日志             |
-| GET  | `/health`              | 健康检查             |
+所有 REST 接口统一使用 envelope：
 
-### 3.3 API 详细定义
+```json
+{
+    "code": 0,
+    "message": "success",
+    "data": {},
+    "timestamp": 1706140800000
+}
+```
 
-#### 3.3.1 获取服务器信息
+字段语义：
 
-**请求：**
+| 字段 | 说明 |
+| --- | --- |
+| `code` | 业务状态码，`0` 表示成功。 |
+| `message` | 状态描述，成功通常为 `success`。 |
+| `data` | 具体业务数据，按接口定义，不强制统一字段模板。 |
+| `timestamp` | 服务端返回时间戳（毫秒）。 |
+
+说明：
+1. 只有服务器聚合类接口会返回 `servers`，其中 `/server/info` 与 `/server/status` 还会返回 `aggregate`。
+2. `scope` 用于标记来源，可为 `local`、`proxy`、`backend`。
+
+### 3.3 API 列表
+
+| 方法 | 路径 | 说明 |
+| ---- | ---- | ---- |
+| GET  | `/server/info` | 获取服务器信息（支持代理聚合） |
+| GET  | `/server/status` | 获取服务器状态（支持代理聚合） |
+| GET  | `/server/tps` | 获取服务器 TPS 列表 |
+| GET  | `/server/mspt` | 获取服务器 MSPT 列表 |
+| GET  | `/players` | 获取玩家列表（可选详情/离线） |
+| GET  | `/players/{identifier}` | 获取玩家详情（identifier 支持名称或 UUID） |
+| POST | `/command/execute` | 执行本地/路由指令 |
+| GET  | `/logs` | 查询日志 |
+
+> 说明：`/health` 目前未启用，不在当前实现范围内。
+
+### 3.4 API 详细定义
+
+#### 3.4.1 服务器信息 `/server/info`
+
+**请求示例：**
 ```http
 GET /api/v1/server/info
 Authorization: Bearer <token>
 ```
 
-**响应（后端服务器）：**
+**响应示例（代理端）：**
 ```json
 {
     "code": 0,
     "message": "success",
     "data": {
-        "name": "MyServer",
-        "platform": "Paper",
-        "version": "1.21.1",
-        "motd": "Welcome to MyServer!",
-        "maxPlayers": 100,
-        "onlinePlayers": 15,
-        "port": 25565
-    },
-    "timestamp": 1706140800000
-}
-```
-
-**响应（Velocity 代理端，含后端聚合）：**
-```json
-{
-    "code": 0,
-    "message": "success",
-    "data": {
-        "name": "Velocity",
-        "platform": "Velocity",
-        "version": "3.3.0",
-        "motd": "",
-        "maxPlayers": 100,
-        "onlinePlayers": 30,
-        "port": 25577,
-        "backends": [
+        "servers": [
+            {
+                "name": "Velocity",
+                "platform": "Velocity",
+                "version": "3.3.0",
+                "motd": "",
+                "onlinePlayers": 30,
+                "maxPlayers": 100,
+                "port": 25577,
+                "scope": "proxy"
+            },
             {
                 "name": "survival",
                 "platform": "Paper",
                 "version": "1.21.1",
-                "onlineCount": 15,
+                "motd": "A Minecraft Server",
+                "onlinePlayers": 15,
                 "maxPlayers": 100,
-                "uptime": 3600000,
-                "tps": { "tps1m": 19.98, "tps5m": 19.95, "tps15m": 19.90 },
-                "memory": { "used": 1024, "max": 4096, "free": 3072 }
-            },
-            {
-                "name": "creative",
-                "platform": "Paper",
-                "version": "1.21.1",
-                "onlineCount": 15,
-                "maxPlayers": 100,
-                "uptime": 7200000,
-                "tps": { "tps1m": 20.0, "tps5m": 20.0, "tps15m": 20.0 },
-                "memory": { "used": 512, "max": 2048, "free": 1536 }
+                "port": null,
+                "scope": "backend"
             }
         ],
-        "backendCount": 2,
         "aggregate": {
-            "totalOnlinePlayers": 30,
-            "totalMaxPlayers": 200
+            "totalOnlinePlayers": 45,
+            "totalMaxPlayers": 200,
+            "backendCount": 1
         }
     },
     "timestamp": 1706140800000
 }
 ```
 
-> **注意：** `backends` 数组仅在 Velocity 代理端启用 proxyBridge 时返回，后端服务器不包含此字段。
+返回字段说明：
 
-#### 3.3.2 获取服务器状态
+| 字段 | 说明 |
+| --- | --- |
+| `servers` | 服务器列表。独立服仅自身；代理端包含代理与已认证后端。 |
+| `aggregate` | 汇总统计（`totalOnlinePlayers`、`totalMaxPlayers`、`backendCount`）。 |
 
-**请求：**
+#### 3.4.2 服务器状态 `/server/status`
+
+**请求示例：**
 ```http
 GET /api/v1/server/status
 Authorization: Bearer <token>
 ```
 
-**响应（后端服务器）：**
+**响应示例：**
 ```json
 {
     "code": 0,
     "message": "success",
     "data": {
-        "online": true,
-        "onlinePlayers": 15,
-        "maxPlayers": 100,
-        "uptime": 86400000,
-        "uptimeFormatted": "1天 0小时 0分钟",
-        "tps": {
-            "1m": 20.0,
-            "5m": 19.98,
-            "15m": 19.95
-        },
-        "memory": {
-            "used": 2048,
-            "total": 4096,
-            "max": 4096
-        }
-    },
-    "timestamp": 1706140800000
-}
-```
-
-**响应（Velocity 代理端，含后端状态）：**
-```json
-{
-    "code": 0,
-    "message": "success",
-    "data": {
-        "online": true,
-        "onlinePlayers": 30,
-        "maxPlayers": 100,
-        "uptime": 86400000,
-        "uptimeFormatted": "1天 0小时 0分钟",
-        "memory": {
-            "used": 256,
-            "total": 512,
-            "max": 512
-        },
-        "backends": [
+        "servers": [
+            {
+                "name": "Velocity",
+                "online": true,
+                "onlinePlayers": 30,
+                "maxPlayers": 100,
+                "uptime": 86400000,
+                "uptimeFormatted": "1天 0小时 0分钟",
+                "tps": null,
+                "mspt": null,
+                "memory": { "used": 256, "total": 512, "max": 512 },
+                "scope": "proxy"
+            },
             {
                 "name": "survival",
-                "platform": "Paper",
-                "version": "1.21.1",
                 "online": true,
                 "onlinePlayers": 15,
                 "maxPlayers": 100,
                 "uptime": 3600000,
                 "uptimeFormatted": "1小时 0分钟",
                 "tps": { "1m": 19.98, "5m": 19.95, "15m": 19.90 },
-                "memory": { "used": 1024, "total": 4096, "max": 4096 }
+                "mspt": 50.05,
+                "memory": { "used": 1024, "total": 4096, "max": 4096 },
+                "scope": "backend"
             }
-        ]
+        ],
+        "aggregate": {
+            "totalOnlinePlayers": 45,
+            "totalMaxPlayers": 200,
+            "backendCount": 1
+        }
     },
     "timestamp": 1706140800000
 }
 ```
 
-> **注意：** Velocity 代理本身不支持 TPS，`tps` 字段仅在后端服务器响应中出现。
+说明：
 
-#### 3.3.3 获取TPS信息
+1. `tps`、`mspt` 在平台不支持时返回 `null`。
+2. `memory` 结构为 `used`、`total`、`max`（单位 MB）。
 
-**请求：**
+#### 3.4.3 服务器 TPS `/server/tps`
+
+**请求示例：**
 ```http
 GET /api/v1/server/tps
 Authorization: Bearer <token>
 ```
 
-**响应（后端服务器）：**
+**响应示例：**
 ```json
 {
     "code": 0,
     "message": "success",
     "data": {
-        "1m": 20.0,
-        "5m": 19.98,
-        "15m": 19.95
-    },
-    "timestamp": 1706140800000
-}
-```
-
-**响应（Velocity 代理端）：**
-```json
-{
-    "code": 0,
-    "message": "success",
-    "data": {
-        "backends": [
+        "servers": [
             {
-                "name": "survival",
-                "tps": { "1m": 19.98, "5m": 19.95, "15m": 19.90 }
+                "name": "Velocity",
+                "tps": null,
+                "scope": "proxy"
             },
             {
-                "name": "creative",
-                "tps": { "1m": 20.0, "5m": 20.0, "15m": 20.0 }
+                "name": "survival",
+                "tps": { "1m": 19.98, "5m": 19.95, "15m": 19.90 },
+                "scope": "backend"
             }
         ]
     },
@@ -605,38 +585,30 @@ Authorization: Bearer <token>
 }
 ```
 
-> **注意：** Velocity 代理本身无 TPS，仅返回各后端服务器的 TPS 数据。
+#### 3.4.4 服务器 MSPT `/server/mspt`
 
-#### 3.3.4 获取在线玩家列表
-
-**请求：**
+**请求示例：**
 ```http
-GET /api/v1/players?page=1&size=20
+GET /api/v1/server/mspt
 Authorization: Bearer <token>
 ```
 
-**查询参数：**
-| 参数 | 类型 | 必填 | 默认值 | 说明                |
-| ---- | ---- | ---- | ------ | ------------------- |
-| page | int  | 否   | 1      | 页码                |
-| size | int  | 否   | 20     | 每页数量（最大100） |
-
-**响应（后端服务器）：**
+**响应示例：**
 ```json
 {
     "code": 0,
     "message": "success",
     "data": {
-        "count": 15,
-        "players": [
+        "servers": [
             {
-                "uuid": "550e8400-e29b-41d4-a716-446655440000",
-                "name": "Steve",
-                "displayName": "§6Steve",
-                "ping": 45,
-                "world": "world",
-                "gameMode": "SURVIVAL",
-                "isOp": false
+                "name": "Velocity",
+                "mspt": null,
+                "scope": "proxy"
+            },
+            {
+                "name": "survival",
+                "mspt": 50.05,
+                "scope": "backend"
             }
         ]
     },
@@ -644,25 +616,46 @@ Authorization: Bearer <token>
 }
 ```
 
-**响应（Velocity 代理端，含后端缓存数据）：**
+#### 3.4.5 玩家列表 `/players`
+
+**请求：**
+```http
+GET /api/v1/players
+Authorization: Bearer <token>
+```
+
+可选查询参数：
+
+| 参数 | 类型 | 默认值 | 说明 |
+| --- | --- | --- | --- |
+| `detail` | boolean | `false` | 是否返回完整玩家字段。默认返回精简字段。 |
+| `includeOffline` | boolean | `false` | 仅代理端生效，是否合并缓存离线玩家。 |
+
+**响应示例（默认精简列表）：**
 ```json
 {
     "code": 0,
     "message": "success",
     "data": {
-        "count": 30,
+        "count": 2,
         "players": [
             {
                 "uuid": "550e8400-e29b-41d4-a716-446655440000",
                 "name": "Steve",
                 "displayName": "§6Steve",
-                "ping": 45,
+                "online": true,
                 "server": "survival",
-                "world": "world",
-                "gameMode": "SURVIVAL",
-                "health": 20.0,
-                "maxHealth": 20.0,
-                "level": 30
+                "ping": 45,
+                "dataSource": "live"
+            },
+            {
+                "uuid": "a8f4...",
+                "name": "Alex",
+                "displayName": "Alex",
+                "online": false,
+                "server": "survival",
+                "ping": null,
+                "dataSource": "cache"
             }
         ]
     },
@@ -670,9 +663,13 @@ Authorization: Bearer <token>
 }
 ```
 
-> **注意：** 代理端玩家列表额外包含 `server` 字段（玩家所在后端服务器名称），以及从后端缓存获取的 `world`、`gameMode`、`health`、`maxHealth`、`level` 字段。
+说明：
 
-#### 3.3.5 获取指定玩家详情
+1. 默认 `detail=false`，仅返回精简字段：`uuid`、`name`、`displayName`、`online`、`server`、`ping`、`dataSource`。
+2. 当 `detail=true` 时，`players[]` 元素为完整玩家对象（与详情接口字段一致）。
+3. 当 `includeOffline=true` 且运行在代理端时，会追加缓存离线玩家。
+
+#### 3.4.6 玩家详情 `/players/{identifier}`
 
 **请求：**
 ```http
@@ -680,7 +677,7 @@ GET /api/v1/players/550e8400-e29b-41d4-a716-446655440000
 Authorization: Bearer <token>
 ```
 
-**响应：**
+**响应示例：**
 ```json
 {
     "code": 0,
@@ -689,32 +686,38 @@ Authorization: Bearer <token>
         "uuid": "550e8400-e29b-41d4-a716-446655440000",
         "name": "Steve",
         "displayName": "§6Steve",
-        "ping": 45,
-        "health": 20.0,
-        "maxHealth": 20.0,
-        "foodLevel": 20,
-        "level": 30,
-        "exp": 0.75,
-        "totalExp": 825,
-        "gameMode": "SURVIVAL",
+        "online": false,
+        "server": "survival",
+        "lastKnownServer": "survival",
+        "ping": null,
         "world": "world",
-        "location": {
-            "x": 100.5,
-            "y": 64.0,
-            "z": -200.5
-        },
+        "gameMode": "SURVIVAL",
+        "health": null,
+        "maxHealth": null,
+        "level": 30,
+        "foodLevel": null,
+        "exp": null,
+        "totalExp": 825,
         "isOp": false,
-        "isFlying": false,
-        "onlineTime": 3600000,
-        "onlineTimeFormatted": "1h 0m",
+        "isFlying": null,
         "firstPlayed": 1700000000000,
-        "lastPlayed": 1706140800000
+        "lastPlayed": 1706140800000,
+        "onlineTime": 3600000,
+        "onlineTimeFormatted": "1h 0m 0s",
+        "location": null,
+        "dataSource": "cache"
     },
     "timestamp": 1706140800000
 }
 ```
 
-#### 3.3.6 执行指令
+离线数据来源优先级：
+
+1. 在线实时数据（`dataSource=live`）
+2. 代理缓存快照（`dataSource=cache`）
+3. 后端持久字段（`dataSource=persisted`）
+
+#### 3.4.7 执行指令 `/command/execute`
 
 **请求：**
 ```http
@@ -724,65 +727,71 @@ Content-Type: application/json
 
 {
     "command": "say Hello World",
-    "targetServer": "survival"
+    "targetServer": "survival",
+    "executor": "CONSOLE",
+    "playerUuid": null,
+    "async": true
 }
 ```
 
 **请求体参数：**
-| 参数         | 类型    | 必填 | 默认值  | 说明                                                         |
-| ------------ | ------- | ---- | ------- | ------------------------------------------------------------ |
-| command      | string  | 是   | -       | 要执行的指令（不带/）                                        |
-| targetServer | string  | 否   | null    | 目标后端服务器名称（仅代理端有效）。为空时在本地执行 |
-| executor     | string  | 否   | CONSOLE | 执行者：CONSOLE/PLAYER                                       |
-| playerUuid   | string  | 条件 | null    | executor为PLAYER时必填                                       |
-| async        | boolean | 否   | false   | 是否异步执行                                                 |
 
-**响应（同步）：**
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `command` | string | 是 | - | 要执行的指令（不带`/`） |
+| `targetServer` | string | 否 | null | 目标后端服务器名。为空时在当前节点本地执行。 |
+| `executor` | string | 否 | `CONSOLE` | `CONSOLE` 或 `PLAYER` |
+| `playerUuid` | string | 条件 | null | `executor=PLAYER` 时指定玩家 UUID |
+| `async` | boolean | 否 | false | 本地执行时是否异步排队 |
+
+说明：
+
+1. `targetServer` 为空时为本地执行。
+2. `targetServer` 非空时由代理转发到目标后端执行，后端支持 `executor=PLAYER`。
+3. `executor=PLAYER` 但玩家不在线时，返回执行失败。
+
+**本地同步响应示例：**
 ```json
 {
     "code": 0,
     "message": "success",
     "data": {
-        "success": true,
         "command": "say Hello World",
-        "output": "[Server] Hello World",
+        "success": true,
+        "status": "DONE",
+        "route": "local",
+        "async": false,
+        "executor": "CONSOLE",
+        "playerUuid": null,
+        "targetServer": null,
         "executionTime": 5,
-        "logs": [
-            "[Server] Hello World"
-        ]
+        "output": "Command executed"
     },
     "timestamp": 1706140800000
 }
 ```
 
-**响应（异步）：**
+**本地异步响应示例：**
 ```json
 {
     "code": 0,
     "message": "success",
     "data": {
-        "taskId": "task-uuid",
+        "command": "say Hello World",
+        "success": true,
         "status": "QUEUED",
-        "command": "say Hello World"
+        "route": "local",
+        "async": true,
+        "taskId": "task-uuid",
+        "executor": "CONSOLE",
+        "playerUuid": null,
+        "targetServer": null
     },
     "timestamp": 1706140800000
 }
 ```
 
-**指令被过滤响应：**
-```json
-{
-    "code": 5002,
-    "message": "指令被过滤",
-    "data": {
-        "command": "op Steve",
-        "reason": "Command is blacklisted"
-    },
-    "timestamp": 1706140800000
-}
-```
-
-**路由到后端服务器响应（代理端）：**
+**路由到后端响应示例：**
 ```json
 {
     "code": 0,
@@ -790,6 +799,13 @@ Content-Type: application/json
     "data": {
         "command": "say Hello",
         "targetServer": "survival",
+        "route": "backend",
+        "async": true,
+        "status": "QUEUED",
+        "taskId": "route-task-id",
+        "replyTo": "route-task-id",
+        "executor": "CONSOLE",
+        "playerUuid": null,
         "success": true,
         "output": "Command sent to backend: survival"
     },
@@ -797,9 +813,11 @@ Content-Type: application/json
 }
 ```
 
-> **注意：** 当指定 `targetServer` 时，指令通过 PMC 异步发送到目标后端执行，REST API 返回的是发送确认而非执行结果。执行结果通过 WebSocket 的 `COMMAND_RESPONSE` 异步返回。
+> 说明：
+> 1. 后端路由执行结果通过 WebSocket `COMMAND_RESPONSE` 异步回传。
+> 2. 出于准确性考虑，REST 本地执行不再采样全局日志作为命令输出。
 
-#### 3.3.7 查询日志
+#### 3.4.8 查询日志 `/logs`
 
 **请求：**
 ```http
@@ -808,52 +826,34 @@ Authorization: Bearer <token>
 ```
 
 **查询参数：**
-| 参数      | 类型   | 必填 | 默认值 | 说明                 |
-| --------- | ------ | ---- | ------ | -------------------- |
-| lines     | int    | 否   | 100    | 返回行数（最大1000） |
-| startTime | long   | 否   | -      | 开始时间戳           |
-| endTime   | long   | 否   | -      | 结束时间戳           |
-| level     | string | 否   | -      | 日志级别过滤         |
-| keyword   | string | 否   | -      | 关键词过滤           |
 
-**响应：**
+| 参数 | 类型 | 必填 | 默认值 | 说明 |
+| --- | --- | --- | --- | --- |
+| `lines` | int | 否 | 100 | 返回行数（最大值由 `logQuery.maxLines` 控制） |
+| `startTime` | long | 否 | - | 开始时间戳 |
+| `endTime` | long | 否 | - | 结束时间戳 |
+| `level` | string | 否 | - | 日志级别过滤（字符串匹配） |
+| `keyword` | string | 否 | - | 关键词过滤 |
+
+**响应示例：**
 ```json
 {
     "code": 0,
     "message": "success",
     "data": {
-        "total": 100,
+        "count": 2,
         "logs": [
             {
-                "timestamp": 1706140800000,
-                "level": "INFO",
-                "logger": "Server",
-                "message": "[Server] Steve joined the game"
+                "server": "Velocity",
+                "scope": "proxy",
+                "message": "[INFO] [AstrbotAdapter] Player Steve joined"
+            },
+            {
+                "server": "Velocity",
+                "scope": "proxy",
+                "message": "[INFO] [AstrbotAdapter] Command routed to survival"
             }
         ]
-    },
-    "timestamp": 1706140800000
-}
-```
-
-#### 3.3.8 健康检查
-
-**请求：**
-```http
-GET /api/v1/health
-```
-
-**注意：** 此接口不需要认证
-
-**响应：**
-```json
-{
-    "code": 0,
-    "message": "success",
-    "data": {
-        "status": "healthy",
-        "version": "1.0.0",
-        "uptime": 86400000
     },
     "timestamp": 1706140800000
 }
@@ -991,6 +991,8 @@ ws://<host>:<port>/ws?token=<token>&version=1
 4. 代理端验证 Secret，返回 `AUTH_RESPONSE` 确认结果
 5. 仅通过认证的后端才能进行后续数据通信
 6. 后端每30秒发送一次 `SERVER_INFO_REPORT`，同时作为心跳；如果120秒未收到汇报，代理端自动移除该后端
+7. 后端在玩家加入事件触发时会立即尝试认证并首轮上报
+8. 若首次认证未成功，后端进入短周期快速重试窗口，成功后立即补发服务器与在线玩家快照
 
 **认证流程图：**
 
@@ -1247,6 +1249,9 @@ ws://<host>:<port>/ws?token=<token>&version=1
     "type": "SYNC_CONFIG",
     "id": "v5w6x7y8",
     "data": {
+        "configVersion": 12,
+        "configHash": "sha256-3f2f6d...",
+        "updatedAt": 1706140800000,
         "aiChat": {
             "group": {
                 "enabled": true,
@@ -1267,7 +1272,10 @@ ws://<host>:<port>/ws?token=<token>&version=1
 }
 ```
 
-> **说明：** 代理端在后端认证成功后自动发送此消息，将 AI 聊天配置同步到后端。后端收到后更新本地 AI 聊天设置（前缀、启用状态、私聊格式等），确保所有 AI 聊天设置由代理端集中管理。
+> **说明：**
+> 1. 代理端在后端认证成功后自动发送此消息，将 AI 聊天配置同步到后端。
+> 2. 后端按 `configVersion` / `configHash` 判重：同版本或同哈希将跳过重复应用。
+> 3. 应用成功后，后端会将同步结果落盘到 `config.yml` 的 `aiChat` 与 `configSync` 段，重启后仍保持最近一次成功同步结果。
 
 #### 7.6.8 玩家加入上报 PLAYER_JOIN_REPORT
 
@@ -1517,6 +1525,12 @@ Astrbot                       Velocity代理          后端插件              
 #### 7.8.1 后端服务器（Bukkit/Paper/Folia）config.yml
 
 ```yaml
+# 配置同步元数据（由代理端同步后自动更新）
+configSync:
+    version: 12
+    hash: "sha256-3f2f6d..."
+    updatedAt: 1706140800000
+
 # 代理模式（后端服务器配置）
 # 启用后，后端不再启动WS/REST API服务器
 # 转为通过Plugin Messaging Channel与Velocity代理通信
@@ -1550,6 +1564,6 @@ proxyBridge:
 
 ### 7.10 限制与注意事项
 
-1. **Plugin Messaging 依赖在线玩家**：Plugin Messaging Channel 需要至少一个在线玩家才能发送消息。当后端服务器无玩家在线时，消息将无法发送
+1. **Plugin Messaging 依赖在线玩家**：Plugin Messaging Channel 需要至少一个在线玩家才能发送消息。当后端服务器无玩家在线时，消息将无法发送；当前实现通过“玩家加入事件即时触发 + 短周期重试 + 30秒心跳兜底”降低首次可通信等待
 2. **后端服务器名称**：后端服务器名称取自 `PlatformAdapter.getServerName()`，需要与 Velocity 的 `velocity.toml` 中注册的服务器名称一致
 3. **Astrbot 指令路由**：当 Astrbot 发送的 `COMMAND_REQUEST` 包含 `targetServer` 字段时，代理端将指令路由到指定后端执行；若未指定或目标不存在，则在代理端本地执行
