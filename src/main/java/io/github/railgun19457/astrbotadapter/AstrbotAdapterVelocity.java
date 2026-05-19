@@ -28,7 +28,7 @@ import java.util.UUID;
 @Plugin(
         id = "astrbotadapter",
         name = "AstrbotAdapter",
-        version = "2.0.0",
+        version = "2.0.6-beta",
         description = "Astrbot框架的Minecraft服务器适配器",
         authors = {"Railgun19457"}
 )
