@@ -5,6 +5,7 @@ import io.github.railgun19457.astrbotadapter.communication.auth.AuthManager;
 import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
 import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
+import io.github.railgun19457.astrbotadapter.communication.websocket.WebSocketSession;
 import io.github.railgun19457.astrbotadapter.core.config.ConfigManager;
 import io.github.railgun19457.astrbotadapter.core.config.ConfigManager.ConfigPlatform;
 import io.github.railgun19457.astrbotadapter.core.config.PluginConfig;
@@ -294,7 +295,7 @@ public abstract class AstrbotAdapterPlugin {
         return platformAdapter;
     }
 
-    private void handleWebSocketMessage(Message message) {
+    private void handleWebSocketMessage(WebSocketSession session, Message message) {
         if (message == null || message.getType() == null) {
             return;
         }
@@ -310,27 +311,27 @@ public abstract class AstrbotAdapterPlugin {
                     messageForwardService.handleIncomingMessage(message);
                 }
             }
-            case COMMAND_REQUEST -> handleCommandRequest(message);
+            case COMMAND_REQUEST -> handleCommandRequest(session, message);
             default -> {
                 // ignore other types
             }
         }
     }
 
-    private void handleCommandRequest(Message message) {
+    private void handleCommandRequest(WebSocketSession session, Message message) {
         if (unifiedServer == null) {
             return;
         }
 
         PluginConfig config = configManager.getConfig();
         if (!config.isCommandEnabled()) {
-            sendCommandError(message, ErrorCode.FEATURE_DISABLED, "外部指令执行功能已禁用");
+            sendCommandError(session, message, ErrorCode.FEATURE_DISABLED, "外部指令执行功能已禁用");
             return;
         }
 
         JsonObject payload = message.getPayload();
         if (payload == null) {
-            sendCommandError(message, ErrorCode.REQUEST_PARAM_MISSING, "缺少请求体");
+            sendCommandError(session, message, ErrorCode.REQUEST_PARAM_MISSING, "缺少请求体");
             return;
         }
 
@@ -338,7 +339,7 @@ public abstract class AstrbotAdapterPlugin {
         CommandExecutionService.ValidationResult validation =
                 CommandExecutionService.validateAndNormalizeCommand(command, config);
         if (!validation.isValid()) {
-            sendCommandError(message, validation.errorCode(), validation.detail());
+            sendCommandError(session, message, validation.errorCode(), validation.detail());
             return;
         }
         command = validation.command();
@@ -347,12 +348,12 @@ public abstract class AstrbotAdapterPlugin {
         String playerUuid = JsonUtil.getString(payload, "playerUuid", null);
 
         // Check if this command should be routed to a backend server via proxy bridge
-        String targetServer = JsonUtil.getString(payload, "targetServer", null);
-        if (targetServer != null) {
-            targetServer = targetServer.trim();
+        String targetServerId = JsonUtil.getString(payload, "targetServerId", null);
+        if (targetServerId != null) {
+            targetServerId = targetServerId.trim();
         }
-        if (targetServer != null && !targetServer.isEmpty()) {
-            routeCommandToBackend(message, targetServer, command, executor, playerUuid);
+        if (targetServerId != null && !targetServerId.isEmpty()) {
+            routeCommandToBackend(session, message, targetServerId, command, executor, playerUuid);
             return;
         }
 
@@ -365,7 +366,7 @@ public abstract class AstrbotAdapterPlugin {
                 logger
         );
         if (!result.success()) {
-            sendCommandError(message,
+            sendCommandError(session, message,
                     result.errorCode() == null ? ErrorCode.COMMAND_EXECUTE_FAILED : result.errorCode(),
                     result.errorMessage());
             return;
@@ -394,10 +395,10 @@ public abstract class AstrbotAdapterPlugin {
                 .payload(responsePayload)
                 .build();
 
-        unifiedServer.broadcast(response);
+        sendCommandResponse(session, response);
     }
 
-    private void sendCommandError(Message request, ErrorCode errorCode, String detail) {
+    protected void sendCommandError(WebSocketSession session, Message request, ErrorCode errorCode, String detail) {
         if (unifiedServer == null) {
             return;
         }
@@ -415,17 +416,25 @@ public abstract class AstrbotAdapterPlugin {
                 .payload(payload)
                 .build();
 
-        unifiedServer.broadcast(error);
+        sendCommandResponse(session, error);
+    }
+
+    protected void sendCommandResponse(WebSocketSession session, Message response) {
+        if (session != null && session.isAuthenticated()) {
+            session.send(response.toJson());
+        } else if (unifiedServer != null && !unifiedServer.sendReply(response)) {
+            logger.fine("No WebSocket reply target for message: " + response.getReplyTo());
+        }
     }
 
     /**
      * Route a command to a backend server via the proxy bridge.
      * Only available on Velocity with proxy bridge enabled.
      */
-    protected void routeCommandToBackend(Message message, String targetServer,
-                                          String command, String executor, String playerUuid) {
+    protected void routeCommandToBackend(WebSocketSession session, Message message, String targetServerId,
+                                           String command, String executor, String playerUuid) {
         // Default implementation: not supported (overridden in Velocity)
-        sendCommandError(message, ErrorCode.FEATURE_DISABLED,
+        sendCommandError(session, message, ErrorCode.FEATURE_DISABLED,
                 "Command routing to backend servers is only available on Velocity with proxy bridge enabled");
     }
 }

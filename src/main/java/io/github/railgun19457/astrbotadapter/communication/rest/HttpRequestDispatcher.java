@@ -3,6 +3,7 @@ package io.github.railgun19457.astrbotadapter.communication.rest;
 import io.github.railgun19457.astrbotadapter.communication.auth.AuthManager;
 import io.github.railgun19457.astrbotadapter.communication.auth.AuthResult;
 import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
+import io.github.railgun19457.astrbotadapter.communication.protocol.ProtocolInfo;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Response;
 import io.github.railgun19457.astrbotadapter.core.util.JsonUtil;
 import io.netty.buffer.Unpooled;
@@ -48,11 +49,20 @@ public class HttpRequestDispatcher extends SimpleChannelInboundHandler<FullHttpR
             return;
         }
 
+        String path = getPath(request.uri());
+
         String clientIp = getClientIp(ctx, request);
         
         // 频率限制
         if (rateLimiter != null && !rateLimiter.allowRequest(clientIp)) {
             sendResponse(ctx, request, Response.error(ErrorCode.SERVER_UNAVAILABLE, "请求过于频繁"));
+            return;
+        }
+
+        // Health check is intentionally public so clients can distinguish
+        // network reachability from token/configuration failures.
+        if ("/api/v1/health".equals(path)) {
+            sendResponse(ctx, request, buildHealthResponse());
             return;
         }
 
@@ -67,7 +77,6 @@ public class HttpRequestDispatcher extends SimpleChannelInboundHandler<FullHttpR
         }
 
         // 路由分发
-        String path = getPath(request.uri());
         RouteHandler handler = routes.get(path);
         
         if (handler == null) {
@@ -134,7 +143,7 @@ public class HttpRequestDispatcher extends SimpleChannelInboundHandler<FullHttpR
         
         FullHttpResponse httpResponse = new DefaultFullHttpResponse(
                 HttpVersion.HTTP_1_1,
-                response.isSuccess() ? HttpResponseStatus.OK : HttpResponseStatus.BAD_REQUEST,
+                toHttpStatus(response),
                 Unpooled.wrappedBuffer(content));
         
         httpResponse.headers().set(HttpHeaderNames.CONTENT_TYPE, "application/json; charset=utf-8");
@@ -148,6 +157,44 @@ public class HttpRequestDispatcher extends SimpleChannelInboundHandler<FullHttpR
         } else {
             ctx.writeAndFlush(httpResponse).addListener(ChannelFutureListener.CLOSE);
         }
+    }
+
+    private Response buildHealthResponse() {
+        com.google.gson.JsonObject data = new com.google.gson.JsonObject();
+        data.addProperty("status", "ok");
+        ProtocolInfo.addTo(data);
+        return Response.success(data);
+    }
+
+    private HttpResponseStatus toHttpStatus(Response response) {
+        if (response.isSuccess()) {
+            return HttpResponseStatus.OK;
+        }
+
+        int code = response.getCode();
+        if (code >= 1001 && code <= 1003) {
+            return HttpResponseStatus.UNAUTHORIZED;
+        }
+        if (code == ErrorCode.RESOURCE_NOT_FOUND.getCode()
+                || code == ErrorCode.PLAYER_NOT_ONLINE.getCode()) {
+            return HttpResponseStatus.NOT_FOUND;
+        }
+        if (code == ErrorCode.FEATURE_DISABLED.getCode()
+                || code == ErrorCode.COMMAND_FILTERED.getCode()
+                || code == ErrorCode.COMMAND_NO_PERMISSION.getCode()) {
+            return HttpResponseStatus.FORBIDDEN;
+        }
+        if (code == ErrorCode.SERVER_UNAVAILABLE.getCode()) {
+            String message = response.getMessage();
+            if (message != null && message.contains("频繁")) {
+                return HttpResponseStatus.TOO_MANY_REQUESTS;
+            }
+            return HttpResponseStatus.SERVICE_UNAVAILABLE;
+        }
+        if (code == ErrorCode.SERVER_INTERNAL_ERROR.getCode()) {
+            return HttpResponseStatus.INTERNAL_SERVER_ERROR;
+        }
+        return HttpResponseStatus.BAD_REQUEST;
     }
 
     @Override

@@ -6,6 +6,7 @@ import io.github.railgun19457.astrbotadapter.communication.auth.AuthResult;
 import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
 import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
+import io.github.railgun19457.astrbotadapter.communication.protocol.ProtocolInfo;
 import io.github.railgun19457.astrbotadapter.communication.rest.HttpRequestDispatcher;
 import io.github.railgun19457.astrbotadapter.communication.websocket.SessionManager;
 import io.github.railgun19457.astrbotadapter.communication.websocket.WebSocketSession;
@@ -19,7 +20,7 @@ import io.netty.handler.codec.http.FullHttpRequest;
 import io.netty.handler.codec.http.HttpMethod;
 import io.netty.handler.codec.http.websocketx.*;
 
-import java.util.function.Consumer;
+import java.util.function.BiConsumer;
 import java.util.logging.Logger;
 
 /**
@@ -36,7 +37,7 @@ public class UnifiedRequestHandler extends SimpleChannelInboundHandler<Object> {
     private final PlatformAdapter platformAdapter;
     private final Logger logger;
     private final SessionManager sessionManager;
-    private final Consumer<Message> messageHandler;
+    private final BiConsumer<WebSocketSession, Message> messageHandler;
     private final HttpRequestDispatcher restDispatcher;
     private final PluginConfig config;
     
@@ -45,9 +46,9 @@ public class UnifiedRequestHandler extends SimpleChannelInboundHandler<Object> {
     private boolean isWebSocket = false;
 
     public UnifiedRequestHandler(AuthManager authManager, EventBus eventBus,
-                                 PlatformAdapter platformAdapter, Logger logger,
-                                 SessionManager sessionManager, Consumer<Message> messageHandler,
-                                 HttpRequestDispatcher restDispatcher, PluginConfig config) {
+                                  PlatformAdapter platformAdapter, Logger logger,
+                                  SessionManager sessionManager, BiConsumer<WebSocketSession, Message> messageHandler,
+                                  HttpRequestDispatcher restDispatcher, PluginConfig config) {
         this.authManager = authManager;
         this.eventBus = eventBus;
         this.platformAdapter = platformAdapter;
@@ -194,7 +195,7 @@ public class UnifiedRequestHandler extends SimpleChannelInboundHandler<Object> {
 
             // 交给外部处理器
             if (messageHandler != null) {
-                messageHandler.accept(message);
+                messageHandler.accept(session, message);
             }
 
         } catch (Exception e) {
@@ -224,6 +225,7 @@ public class UnifiedRequestHandler extends SimpleChannelInboundHandler<Object> {
         serverInfo.addProperty("version", platformAdapter.getServerVersion());
 
         JsonObject payload = new JsonObject();
+        ProtocolInfo.addTo(payload);
         payload.addProperty("sessionId", session.getSessionId());
         payload.add("serverInfo", serverInfo);
 

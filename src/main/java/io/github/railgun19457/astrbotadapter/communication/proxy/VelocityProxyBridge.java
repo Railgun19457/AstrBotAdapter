@@ -412,10 +412,11 @@ public class VelocityProxyBridge implements ProxyBridgeProvider {
         BackendServerInfo info = getAuthenticatedBackend(senderServer);
         if (info == null) return;
 
-        // Forward command result to Astrbot via WebSocket
+        // Forward command result only to the WebSocket session that issued the request.
         if (broadcaster != null && broadcaster.isRunning() && msg.getData() != null) {
             JsonObject payload = msg.getData();
-            payload.addProperty("serverName", senderServer);
+            payload.addProperty("serverId", senderServer);
+            payload.addProperty("route", "backend");
 
             Message response = Message.builder()
                     .type(MessageType.COMMAND_RESPONSE)
@@ -423,7 +424,9 @@ public class VelocityProxyBridge implements ProxyBridgeProvider {
                     .payload(payload)
                     .build();
 
-            broadcaster.broadcast(response);
+            if (!broadcaster.sendReply(response)) {
+                logger.fine("No WebSocket reply target for backend command result: " + msg.getReplyTo());
+            }
         }
     }
 

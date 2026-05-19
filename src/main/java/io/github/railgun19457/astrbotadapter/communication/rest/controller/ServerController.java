@@ -5,6 +5,7 @@ import com.google.gson.JsonElement;
 import com.google.gson.JsonNull;
 import com.google.gson.JsonObject;
 import io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode;
+import io.github.railgun19457.astrbotadapter.communication.protocol.ProtocolInfo;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Response;
 import io.github.railgun19457.astrbotadapter.communication.proxy.BackendServerInfo;
 import io.github.railgun19457.astrbotadapter.communication.proxy.ProxyBridgeProvider;
@@ -102,7 +103,9 @@ public class ServerController {
 
         JsonArray servers = new JsonArray();
         JsonObject local = new JsonObject();
+        local.addProperty("id", server.getName());
         local.addProperty("name", server.getName());
+        local.addProperty("displayName", server.getName());
         local.addProperty("platform", platformAdapter.getPlatformType().getDisplayName());
         local.addProperty("version", server.getVersion());
         local.addProperty("motd", server.getMotd());
@@ -124,7 +127,9 @@ public class ServerController {
                 }
 
                 JsonObject backend = new JsonObject();
+                backend.addProperty("id", entry.getKey());
                 backend.addProperty("name", info.getServerName());
+                backend.addProperty("displayName", info.getServerName());
                 backend.addProperty("platform", info.getPlatform());
                 backend.addProperty("version", info.getVersion());
                 backend.addProperty("motd", info.getMotd());
@@ -146,6 +151,7 @@ public class ServerController {
         aggregate.addProperty("backendCount", backendCount);
 
         JsonObject data = new JsonObject();
+        ProtocolInfo.addTo(data);
         data.add("servers", servers);
         data.add("aggregate", aggregate);
         return data;
@@ -156,7 +162,9 @@ public class ServerController {
 
         JsonArray servers = new JsonArray();
         JsonObject local = new JsonObject();
+        local.addProperty("id", server.getName());
         local.addProperty("name", server.getName());
+        local.addProperty("displayName", server.getName());
         local.addProperty("online", true);
         local.addProperty("onlinePlayers", server.getOnlinePlayerCount());
         local.addProperty("maxPlayers", server.getMaxPlayers());
@@ -180,7 +188,9 @@ public class ServerController {
                 }
 
                 JsonObject backend = new JsonObject();
+                backend.addProperty("id", entry.getKey());
                 backend.addProperty("name", info.getServerName());
+                backend.addProperty("displayName", info.getServerName());
                 backend.addProperty("online", true);
                 backend.addProperty("onlinePlayers", info.getOnlineCount());
                 backend.addProperty("maxPlayers", info.getMaxPlayers());
@@ -204,6 +214,7 @@ public class ServerController {
         aggregate.addProperty("backendCount", backendCount);
 
         JsonObject data = new JsonObject();
+        ProtocolInfo.addTo(data);
         data.add("servers", servers);
         data.add("aggregate", aggregate);
         return data;
@@ -214,7 +225,9 @@ public class ServerController {
         JsonArray servers = new JsonArray();
 
         JsonObject local = new JsonObject();
+        local.addProperty("id", server.getName());
         local.addProperty("name", server.getName());
+        local.addProperty("displayName", server.getName());
         local.add("tps", normalizeLocalTps(server.getTps()));
         local.addProperty("scope", platformAdapter.getPlatformType().isProxy() ? "proxy" : "local");
         servers.add(local);
@@ -227,7 +240,9 @@ public class ServerController {
                 }
 
                 JsonObject backend = new JsonObject();
+                backend.addProperty("id", entry.getKey());
                 backend.addProperty("name", info.getServerName());
+                backend.addProperty("displayName", info.getServerName());
                 backend.add("tps", normalizeBackendTps(info.getTps()));
                 backend.addProperty("scope", "backend");
                 servers.add(backend);
@@ -235,6 +250,7 @@ public class ServerController {
         }
 
         JsonObject data = new JsonObject();
+        ProtocolInfo.addTo(data);
         data.add("servers", servers);
         return data;
     }
@@ -244,7 +260,9 @@ public class ServerController {
         JsonArray servers = new JsonArray();
 
         JsonObject local = new JsonObject();
+        local.addProperty("id", server.getName());
         local.addProperty("name", server.getName());
+        local.addProperty("displayName", server.getName());
         local.add("mspt", normalizeMspt(server.getMspt()));
         local.addProperty("scope", platformAdapter.getPlatformType().isProxy() ? "proxy" : "local");
         servers.add(local);
@@ -257,7 +275,9 @@ public class ServerController {
                 }
 
                 JsonObject backend = new JsonObject();
+                backend.addProperty("id", entry.getKey());
                 backend.addProperty("name", info.getServerName());
+                backend.addProperty("displayName", info.getServerName());
                 backend.add("mspt", normalizeMspt(info.getMspt()));
                 backend.addProperty("scope", "backend");
                 servers.add(backend);
@@ -265,6 +285,7 @@ public class ServerController {
         }
 
         JsonObject data = new JsonObject();
+        ProtocolInfo.addTo(data);
         data.add("servers", servers);
         return data;
     }

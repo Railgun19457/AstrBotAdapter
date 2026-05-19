@@ -44,7 +44,9 @@ public enum MessageType {
     
     // ===== 错误 =====
     /** 错误消息 */
-    ERROR;
+    ERROR,
+    /** 服务端主动断开连接通知 */
+    DISCONNECT;
 
     /**
      * 从字符串解析消息类型

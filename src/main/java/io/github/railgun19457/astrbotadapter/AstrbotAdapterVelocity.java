@@ -10,6 +10,7 @@ import com.velocitypowered.api.plugin.annotation.DataDirectory;
 import com.velocitypowered.api.proxy.ProxyServer;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
 import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
+import io.github.railgun19457.astrbotadapter.communication.websocket.WebSocketSession;
 import io.github.railgun19457.astrbotadapter.communication.proxy.VelocityProxyBridge;
 import io.github.railgun19457.astrbotadapter.core.config.ConfigManager.ConfigPlatform;
 import io.github.railgun19457.astrbotadapter.core.util.JsonUtil;
@@ -235,21 +236,28 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
      * Override command routing to support sending commands to backend servers.
      */
     @Override
-    protected void routeCommandToBackend(io.github.railgun19457.astrbotadapter.communication.protocol.Message message,
-                                          String targetServer, String command,
-                                          String executor, String playerUuid) {
+    protected void routeCommandToBackend(WebSocketSession session, Message message,
+                                           String targetServerId, String command,
+                                           String executor, String playerUuid) {
         if (proxyBridge == null) {
-            super.routeCommandToBackend(message, targetServer, command, executor, playerUuid);
+            super.routeCommandToBackend(session, message, targetServerId, command, executor, playerUuid);
             return;
         }
 
+        if (session != null && unifiedServer != null) {
+            unifiedServer.rememberReplyTarget(message.getId(), session.getSessionId());
+        }
+
         boolean sent = proxyBridge.sendCommandToBackend(
-                targetServer, command, executor, playerUuid, message.getId());
+                targetServerId, command, executor, playerUuid, message.getId());
 
         if (!sent) {
+            if (unifiedServer != null) {
+                unifiedServer.forgetReplyTarget(message.getId());
+            }
             JsonObject payload = new JsonObject();
             payload.addProperty("code", io.github.railgun19457.astrbotadapter.communication.protocol.ErrorCode.COMMAND_EXECUTE_FAILED.getCode());
-            payload.addProperty("message", "无法将指令发送到后端服务器: " + targetServer);
+            payload.addProperty("message", "无法将指令发送到后端服务器: " + targetServerId);
             payload.addProperty("detail", "后端服务器未连接或无在线玩家");
 
             io.github.railgun19457.astrbotadapter.communication.protocol.Message error =
@@ -259,9 +267,7 @@ public class AstrbotAdapterVelocity extends AstrbotAdapterPlugin {
                     .payload(payload)
                     .build();
 
-            if (unifiedServer != null) {
-                unifiedServer.broadcast(error);
-            }
+            sendCommandResponse(session, error);
         }
     }
 

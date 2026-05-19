@@ -19,6 +19,12 @@ public interface MessageBroadcaster {
     void broadcast(String message);
 
     /**
+     * Send a correlated response to the WebSocket session that sent the request.
+     * Returns false if the original request did not come from a WebSocket session.
+     */
+    boolean sendReply(Message message);
+
+    /**
      * 检查服务是否运行中
      */
     boolean isRunning();

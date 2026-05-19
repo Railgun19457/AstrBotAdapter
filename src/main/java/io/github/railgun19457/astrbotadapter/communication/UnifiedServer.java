@@ -1,6 +1,7 @@
 package io.github.railgun19457.astrbotadapter.communication;
 
 import io.github.railgun19457.astrbotadapter.communication.auth.AuthManager;
+import io.github.railgun19457.astrbotadapter.communication.protocol.MessageType;
 import io.github.railgun19457.astrbotadapter.communication.protocol.Message;
 import io.github.railgun19457.astrbotadapter.communication.rest.HttpRequestDispatcher;
 import io.github.railgun19457.astrbotadapter.communication.proxy.ProxyBridgeProvider;
@@ -22,9 +23,12 @@ import io.netty.handler.codec.http.HttpObjectAggregator;
 import io.netty.handler.codec.http.HttpServerCodec;
 import io.netty.handler.stream.ChunkedWriteHandler;
 import io.netty.handler.timeout.IdleStateHandler;
+import com.google.gson.JsonObject;
 
 import java.util.concurrent.TimeUnit;
-import java.util.function.Consumer;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.Map;
+import java.util.function.BiConsumer;
 import java.util.logging.Logger;
 
 /**
@@ -42,7 +46,8 @@ public class UnifiedServer implements MessageBroadcaster {
     
     // WebSocket相关
     private final SessionManager sessionManager;
-    private Consumer<Message> messageHandler;
+    private BiConsumer<WebSocketSession, Message> messageHandler;
+    private final Map<String, String> replyTargets = new ConcurrentHashMap<>();
     
     // REST相关
     private HttpRequestDispatcher dispatcher;
@@ -140,6 +145,9 @@ public class UnifiedServer implements MessageBroadcaster {
      * 停止服务器
      */
     public void stop() {
+        if (running) {
+            broadcastDisconnect("SERVER_SHUTDOWN", "Server is shutting down");
+        }
         running = false;
         
         // 关闭所有WebSocket会话
@@ -164,6 +172,19 @@ public class UnifiedServer implements MessageBroadcaster {
         logger.info("统一服务器已停止");
     }
 
+    private void broadcastDisconnect(String reason, String message) {
+        JsonObject payload = new JsonObject();
+        payload.addProperty("reason", reason);
+        payload.addProperty("message", message);
+
+        Message disconnect = Message.builder()
+                .type(MessageType.DISCONNECT)
+                .payload(payload)
+                .build();
+
+        broadcast(disconnect);
+    }
+
     /**
      * 广播WebSocket消息到所有客户端
      */
@@ -176,6 +197,38 @@ public class UnifiedServer implements MessageBroadcaster {
      */
     public void broadcast(String message) {
         sessionManager.broadcast(message);
+    }
+
+    @Override
+    public boolean sendReply(Message message) {
+        if (message == null || message.getReplyTo() == null || message.getReplyTo().isBlank()) {
+            return false;
+        }
+
+        String sessionId = replyTargets.remove(message.getReplyTo());
+        if (sessionId == null) {
+            return false;
+        }
+
+        WebSocketSession session = sessionManager.getSession(sessionId);
+        if (session == null || !session.isAuthenticated()) {
+            return false;
+        }
+
+        session.send(message.toJson());
+        return true;
+    }
+
+    public void rememberReplyTarget(String requestId, String sessionId) {
+        if (requestId != null && !requestId.isBlank() && sessionId != null && !sessionId.isBlank()) {
+            replyTargets.put(requestId, sessionId);
+        }
+    }
+
+    public void forgetReplyTarget(String requestId) {
+        if (requestId != null) {
+            replyTargets.remove(requestId);
+        }
     }
 
     /**
@@ -191,7 +244,7 @@ public class UnifiedServer implements MessageBroadcaster {
     /**
      * 设置WebSocket消息处理器
      */
-    public void setMessageHandler(Consumer<Message> messageHandler) {
+    public void setMessageHandler(BiConsumer<WebSocketSession, Message> messageHandler) {
         this.messageHandler = messageHandler;
     }
 
