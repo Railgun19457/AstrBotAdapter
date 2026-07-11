@@ -1,0 +1,20 @@
+{
+  "v": 1,
+  "id": "01HRAIREPLYREQ0000000000",
+  "type": "request",
+  "op": "ai.reply",
+  "ts": 1710001120000,
+  "seq": 23,
+  "route": {
+    "src": { "role": "astrbot", "id": "astrbot-main" },
+    "dst": { "role": "standalone", "id": "survival" },
+    "trace_id": "01HRAIREPLYTRACE000000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": {
+    "dedupe_key": "ai:reply:01HRMSG0000000000000000",
+    "reply_to_message_id": "01HRMSG0000000000000000",
+    "delivery": { "type": "broadcast" },
+    "message": { "content": "hello Steve", "plain_text": "hello Steve", "format": "plain", "mentions": [] }
+  }
+}

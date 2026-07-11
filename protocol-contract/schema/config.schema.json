@@ -1,0 +1,57 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://railgun19457.github.io/astrbot-minecraft/config.schema.json",
+  "$defs": {
+    "config_sync": {
+      "type": "object",
+      "required": ["revision", "ai", "chat", "permissions"],
+      "properties": {
+        "revision": { "type": "string", "minLength": 1 },
+        "ai": {
+          "type": "object",
+          "required": ["group_enabled", "group_prefix", "private_enabled", "private_prefix"],
+          "properties": {
+            "group_enabled": { "type": "boolean" },
+            "group_prefix": { "type": "string" },
+            "private_enabled": { "type": "boolean" },
+            "private_prefix": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "chat": {
+          "type": "object",
+          "required": ["forward_enabled", "forward_prefix"],
+          "properties": {
+            "forward_enabled": { "type": "boolean" },
+            "forward_prefix": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "permissions": {
+          "type": "object",
+          "required": ["report_status", "report_players", "execute_command", "send_private_message", "query_logs"],
+          "properties": {
+            "report_status": { "type": "boolean" },
+            "report_players": { "type": "boolean" },
+            "execute_command": { "type": "boolean" },
+            "send_private_message": { "type": "boolean" },
+            "query_logs": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "config_sync_response": {
+      "type": "object",
+      "required": ["applied", "revision", "effective_at"],
+      "properties": {
+        "applied": { "type": "boolean" },
+        "idempotent": { "type": "boolean" },
+        "revision": { "type": "string", "minLength": 1 },
+        "effective_at": { "type": "string", "enum": ["next_reload", "immediate"] }
+      },
+      "additionalProperties": false
+    }
+  }
+}

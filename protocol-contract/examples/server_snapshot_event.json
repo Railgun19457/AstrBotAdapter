@@ -1,0 +1,24 @@
+{
+  "v": 1,
+  "id": "01HRSERVERSNAPSHOT0000000",
+  "type": "event",
+  "op": "server.snapshot",
+  "ts": 1710001010000,
+  "seq": 18,
+  "route": {
+    "src": { "role": "backend", "id": "survival" },
+    "dst": { "role": "velocity", "id": "velocity-main" },
+    "trace_id": "01HRSNAPSHOTTRACE000000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": {
+    "server_id": "survival",
+    "role": "backend",
+    "online_count": 8,
+    "max_players": 100,
+    "uptime_ms": 3600000,
+    "memory": { "used_mb": 1024, "max_mb": 4096 },
+    "performance": { "tps": 20.0, "mspt": 12.5 },
+    "reported_at": 1710001010000
+  }
+}

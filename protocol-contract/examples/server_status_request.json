@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "id": "01HRREQ00000000000000000",
+  "type": "request",
+  "op": "server.status",
+  "ts": 1710000200000,
+  "seq": 1,
+  "route": {
+    "src": { "role": "astrbot", "id": "astrbot-main" },
+    "dst": { "role": "standalone", "id": "survival" },
+    "trace_id": "01HRTRACE0000000000000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": {
+    "server_ids": [],
+    "include_performance": true
+  }
+}

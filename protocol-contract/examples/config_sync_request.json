@@ -1,0 +1,20 @@
+{
+  "v": 1,
+  "id": "01HRCONFIGSYNCREQ0000000",
+  "type": "request",
+  "op": "config.sync",
+  "ts": 1710001300000,
+  "seq": 26,
+  "route": {
+    "src": { "role": "velocity", "id": "velocity-main" },
+    "dst": { "role": "backend", "id": "survival" },
+    "trace_id": "01HRCONFIGSYNCTRACE000"
+  },
+  "target": { "scope": "self" },
+  "payload": {
+    "revision": "01HRCONFIGREV0000000000",
+    "ai": { "group_enabled": true, "group_prefix": "!ai ", "private_enabled": true, "private_prefix": "!ask " },
+    "chat": { "forward_enabled": true, "forward_prefix": "" },
+    "permissions": { "report_status": true, "report_players": true, "execute_command": true, "send_private_message": true, "query_logs": false }
+  }
+}

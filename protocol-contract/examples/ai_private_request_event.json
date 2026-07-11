@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "id": "01HRAIPRIVATEREQ00000000",
+  "type": "event",
+  "op": "ai.private.request",
+  "ts": 1710001110000,
+  "seq": 22,
+  "route": {
+    "src": { "role": "standalone", "id": "survival" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRAIPRIVATETRACE000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": {
+    "player": { "uuid": "00000000-0000-0000-0000-000000000000", "name": "Steve", "display_name": "Steve", "server_id": "survival" },
+    "message": { "content": "private ai", "plain_text": "private ai", "format": "plain", "mentions": [] },
+    "conversation_hint": { "scope": "private", "server_id": "survival", "player_uuid": "00000000-0000-0000-0000-000000000000" }
+  }
+}

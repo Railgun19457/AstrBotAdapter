@@ -1,0 +1,27 @@
+name: AstrBotAdapter
+version: 3.0.0-SNAPSHOT
+main: io.github.railgun19457.astrbotadapter.platform.bukkit.AstrBotAdapterBukkitPlugin
+api-version: '1.20'
+description: AstrBot Minecraft server adapter
+authors:
+  - Railgun19457
+website: https://github.com/Railgun19457/AstrBotAdapter
+
+commands:
+  astrbot:
+    description: AstrBotAdapter main command
+    usage: /<command> [help|reload|status|auth|connections]
+    permission: astrbot.use
+    aliases:
+      - abot
+      - astra
+
+permissions:
+  astrbot.use:
+    description: Allows using basic AstrBotAdapter commands
+    default: true
+  astrbot.admin:
+    description: Allows managing AstrBotAdapter
+    default: op
+    children:
+      astrbot.use: true

@@ -1,0 +1,12 @@
+[
+  "core.v1",
+  "auth.ed25519.v1",
+  "chat.v1",
+  "player.v1",
+  "server.v1",
+  "command.v1",
+  "ai.v1",
+  "log.v1",
+  "cluster.v1",
+  "config.v1"
+]

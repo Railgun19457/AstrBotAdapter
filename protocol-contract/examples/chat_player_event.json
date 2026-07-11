@@ -1,0 +1,20 @@
+{
+  "v": 1,
+  "id": "01HRCHATPLAYER00000000000",
+  "type": "event",
+  "op": "chat.player",
+  "ts": 1710000100000,
+  "seq": 10,
+  "route": {
+    "src": { "role": "backend", "id": "survival" },
+    "dst": { "role": "velocity", "id": "velocity-main" },
+    "trace_id": "01HREVENTTRACE000000000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": {
+    "player": { "uuid": "00000000-0000-0000-0000-000000000000", "name": "Steve", "display_name": "Steve", "server_id": "survival" },
+    "message": { "message_id": "01HRMSG0000000000000000", "content": "hello", "plain_text": "hello", "format": "plain", "mentions": [], "created_at": 1710000500000 },
+    "world": "world",
+    "source": "player_chat"
+  }
+}

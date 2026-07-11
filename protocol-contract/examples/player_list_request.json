@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "id": "01HRPLAYERLISTREQ00000000",
+  "type": "request",
+  "op": "player.list",
+  "ts": 1710000900000,
+  "seq": 15,
+  "route": {
+    "src": { "role": "astrbot", "id": "astrbot-main" },
+    "dst": { "role": "velocity", "id": "velocity-main" },
+    "trace_id": "01HRPLAYERLISTTRACE000"
+  },
+  "target": { "scope": "all_servers" },
+  "payload": { "include_details": false, "include_recent_offline": false }
+}

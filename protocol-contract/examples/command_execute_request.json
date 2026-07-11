@@ -1,0 +1,23 @@
+{
+  "v": 1,
+  "id": "01HRCMDREQ00000000000000",
+  "type": "request",
+  "op": "command.execute",
+  "ts": 1710000200000,
+  "seq": 19,
+  "route": {
+    "src": { "role": "astrbot", "id": "astrbot-main" },
+    "dst": { "role": "standalone", "id": "survival" },
+    "trace_id": "01HRCMDTRACE0000000000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": {
+    "dedupe_key": "qq:group:987654:cmd:01HRCMD000000000000",
+    "command": "say hello",
+    "executor": { "type": "console" },
+    "requested_by": { "type": "external_user", "platform": "qq", "id": "123456", "name": "Alice", "display_name": "Alice" },
+    "request_timeout_ms": 10000,
+    "execution_timeout_ms": 5000,
+    "mode": "immediate"
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://railgun19457.github.io/astrbot-minecraft/chat.schema.json",
+  "$defs": {
+    "chat_player": {
+      "type": "object",
+      "required": ["player", "message", "source"],
+      "properties": {
+        "player": { "$ref": "common.schema.json#/$defs/player_ref" },
+        "message": { "$ref": "common.schema.json#/$defs/text_message" },
+        "world": { "type": "string" },
+        "source": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "chat_external": {
+      "type": "object",
+      "required": ["dedupe_key", "sender", "conversation", "message"],
+      "properties": {
+        "dedupe_key": { "type": "string", "minLength": 1 },
+        "sender": { "$ref": "common.schema.json#/$defs/actor" },
+        "conversation": {
+          "type": "object",
+          "required": ["platform", "type", "id"],
+          "properties": {
+            "platform": { "type": "string" },
+            "type": { "type": "string" },
+            "id": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "bridge": {
+          "type": "object",
+          "required": ["origin_platform", "origin_conversation_id", "suppress_echo"],
+          "properties": {
+            "origin_platform": { "type": "string" },
+            "origin_conversation_id": { "type": "string" },
+            "suppress_echo": { "type": "boolean" }
+          },
+          "additionalProperties": true
+        },
+        "message": { "$ref": "common.schema.json#/$defs/text_message" }
+      },
+      "additionalProperties": true
+    },
+    "chat_private": {
+      "type": "object",
+      "required": ["dedupe_key", "player", "message"],
+      "properties": {
+        "dedupe_key": { "type": "string", "minLength": 1 },
+        "player": {
+          "type": "object",
+          "required": ["server_id"],
+          "properties": {
+            "uuid": { "type": "string" },
+            "name": { "type": "string" },
+            "server_id": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "message": { "$ref": "common.schema.json#/$defs/text_message" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

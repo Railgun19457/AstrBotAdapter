@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "id": "01HRPONG0000000000000000",
+  "type": "heartbeat",
+  "op": "core.pong",
+  "ts": 1710000300020,
+  "seq": 31,
+  "route": {
+    "src": { "role": "standalone", "id": "survival" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRPINGTRACE0000000000"
+  },
+  "reply_to": "01HRPING0000000000000000",
+  "payload": { "session_id": "01HRSESSION000000000000", "server_time": 1710000300020 }
+}

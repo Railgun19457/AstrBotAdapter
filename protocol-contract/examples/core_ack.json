@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "id": "01HRACK00000000000000000",
+  "type": "ack",
+  "op": "core.ack",
+  "ts": 1710000200010,
+  "seq": 22,
+  "route": {
+    "src": { "role": "velocity", "id": "velocity-main" },
+    "dst": { "role": "backend", "id": "survival" },
+    "trace_id": "01HREVENTTRACE000000000"
+  },
+  "reply_to": "01HREVENT000000000000000",
+  "payload": { "received": true }
+}

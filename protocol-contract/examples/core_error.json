@@ -1,0 +1,16 @@
+{
+  "v": 1,
+  "id": "01HRERR00000000000000000",
+  "type": "error",
+  "op": "core.error",
+  "ts": 1710000400000,
+  "seq": 31,
+  "route": {
+    "src": { "role": "velocity", "id": "velocity-main" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRERRTRACE0000000000"
+  },
+  "reply_to": "01HRREQ00000000000000000",
+  "status": { "ok": false, "code": "bad_request", "message": "missing required field: target" },
+  "payload": { "field": "target" }
+}

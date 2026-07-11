@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "id": "01HRLOGQUERYREQ000000000",
+  "type": "request",
+  "op": "log.query",
+  "ts": 1710001200000,
+  "seq": 24,
+  "route": {
+    "src": { "role": "astrbot", "id": "astrbot-main" },
+    "dst": { "role": "standalone", "id": "survival" },
+    "trace_id": "01HRLOGQUERYTRACE00000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": { "tail_lines": 100, "since": 1710000000000, "until": 1710001000000, "level": "INFO", "keyword": "Steve", "max_lines": 200 }
+}

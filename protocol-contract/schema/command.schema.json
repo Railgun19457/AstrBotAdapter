@@ -1,0 +1,60 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://railgun19457.github.io/astrbot-minecraft/command.schema.json",
+  "$defs": {
+    "command_execute_request": {
+      "type": "object",
+      "required": ["dedupe_key", "command", "executor", "requested_by", "request_timeout_ms", "execution_timeout_ms", "mode"],
+      "properties": {
+        "dedupe_key": { "type": "string", "minLength": 1 },
+        "command": { "type": "string", "minLength": 1 },
+        "executor": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string", "enum": ["console", "player"] },
+            "player_name": { "type": "string" },
+            "player_uuid": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "requested_by": { "$ref": "common.schema.json#/$defs/actor" },
+        "request_timeout_ms": { "type": "integer", "minimum": 1 },
+        "execution_timeout_ms": { "type": "integer", "minimum": 1 },
+        "mode": { "type": "string", "enum": ["immediate", "queued"] }
+      },
+      "additionalProperties": true
+    },
+    "command_execute_response": {
+      "type": "object",
+      "required": ["accepted", "executed"],
+      "properties": {
+        "accepted": { "type": "boolean" },
+        "executed": { "type": "boolean" },
+        "job_id": { "type": "string" },
+        "queued": { "type": "boolean" },
+        "estimated_delay_ms": { "type": "integer" },
+        "duration_ms": { "type": "integer" },
+        "output": { "type": "string" },
+        "exit_code": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "command_completed": {
+      "type": "object",
+      "required": ["job_id", "request_id", "server_id", "accepted", "executed", "completed_at"],
+      "properties": {
+        "job_id": { "type": "string", "minLength": 1 },
+        "request_id": { "type": "string", "minLength": 1 },
+        "server_id": { "type": "string", "minLength": 1 },
+        "accepted": { "type": "boolean" },
+        "executed": { "type": "boolean" },
+        "duration_ms": { "type": "integer" },
+        "output": { "type": "string" },
+        "exit_code": { "type": "integer" },
+        "completed_at": { "type": "integer" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

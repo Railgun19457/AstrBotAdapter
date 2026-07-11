@@ -1,0 +1,47 @@
+{
+  "v": 1,
+  "id": "01HRSERVERSTATUSRESP00000",
+  "type": "response",
+  "op": "server.status",
+  "ts": 1710001000000,
+  "seq": 17,
+  "route": {
+    "src": { "role": "velocity", "id": "velocity-main" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRSERVERSTATUSTRACE00"
+  },
+  "reply_to": "01HRREQ00000000000000000",
+  "status": { "ok": true, "code": "ok", "message": "success" },
+  "payload": {
+    "servers": [
+      {
+        "server_id": "velocity-main",
+        "display_name": "Group Entry",
+        "role": "velocity",
+        "status": { "ok": true, "code": "ok", "message": "success" },
+        "platform": "velocity",
+        "version": "3.3.0",
+        "online_count": 10,
+        "max_players": 100,
+        "uptime_ms": 3600000,
+        "memory": { "used_mb": 512, "max_mb": 1024 },
+        "performance": { "tps": 20.0, "mspt": 0.0 }
+      },
+      {
+        "server_id": "survival",
+        "display_name": "Survival",
+        "role": "backend",
+        "status": { "ok": true, "code": "ok", "message": "success" },
+        "platform": "paper",
+        "version": "1.20.4",
+        "online_count": 8,
+        "max_players": 100,
+        "uptime_ms": 3600000,
+        "memory": { "used_mb": 1024, "max_mb": 4096 },
+        "performance": { "tps": 20.0, "mspt": 12.5 }
+      }
+    ],
+    "errors": [],
+    "generated_at": 1710001000000
+  }
+}

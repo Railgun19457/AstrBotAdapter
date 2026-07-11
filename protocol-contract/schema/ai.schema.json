@@ -1,0 +1,45 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://railgun19457.github.io/astrbot-minecraft/ai.schema.json",
+  "$defs": {
+    "ai_request": {
+      "type": "object",
+      "required": ["player", "message", "conversation_hint"],
+      "properties": {
+        "player": { "$ref": "common.schema.json#/$defs/player_ref" },
+        "message": { "$ref": "common.schema.json#/$defs/text_message" },
+        "conversation_hint": {
+          "type": "object",
+          "required": ["scope", "server_id"],
+          "properties": {
+            "scope": { "type": "string", "enum": ["server", "private"] },
+            "server_id": { "type": "string" },
+            "player_uuid": { "type": "string" }
+          },
+          "additionalProperties": true
+        }
+      },
+      "additionalProperties": true
+    },
+    "ai_reply": {
+      "type": "object",
+      "required": ["dedupe_key", "reply_to_message_id", "delivery", "message"],
+      "properties": {
+        "dedupe_key": { "type": "string", "minLength": 1 },
+        "reply_to_message_id": { "type": "string", "minLength": 1 },
+        "delivery": {
+          "type": "object",
+          "required": ["type"],
+          "properties": {
+            "type": { "type": "string", "enum": ["broadcast", "private"] },
+            "player_uuid": { "type": "string" },
+            "player_name": { "type": "string" }
+          },
+          "additionalProperties": true
+        },
+        "message": { "$ref": "common.schema.json#/$defs/text_message" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

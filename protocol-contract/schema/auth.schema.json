@@ -1,0 +1,66 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://railgun19457.github.io/astrbot-minecraft/auth.schema.json",
+  "$defs": {
+    "auth_hello": {
+      "type": "object",
+      "required": ["protocol", "key_id", "client_nonce", "capabilities"],
+      "properties": {
+        "protocol": {
+          "type": "object",
+          "required": ["name", "min_v", "max_v"],
+          "properties": {
+            "name": { "const": "astrbot-minecraft" },
+            "min_v": { "type": "integer", "minimum": 1 },
+            "max_v": { "type": "integer", "minimum": 1 }
+          },
+          "additionalProperties": false
+        },
+        "key_id": { "type": "string", "minLength": 1 },
+        "client_nonce": { "type": "string", "minLength": 1 },
+        "auth_code": { "type": "string" },
+        "capabilities": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "auth_challenge": {
+      "type": "object",
+      "required": ["server_key_id", "server_nonce", "challenge_id", "expires_at", "selected_v", "capabilities"],
+      "properties": {
+        "server_key_id": { "type": "string", "minLength": 1 },
+        "server_nonce": { "type": "string", "minLength": 1 },
+        "challenge_id": { "type": "string", "minLength": 1 },
+        "expires_at": { "type": "integer" },
+        "selected_v": { "type": "integer", "minimum": 1 },
+        "capabilities": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": true
+    },
+    "auth_prove_client": {
+      "type": "object",
+      "required": ["key_id", "signature"],
+      "properties": {
+        "key_id": { "type": "string", "minLength": 1 },
+        "public_key": { "type": "string" },
+        "signature": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "auth_result": {
+      "type": "object",
+      "required": ["ok"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "key_id": { "type": "string" },
+        "public_key": { "type": "string" },
+        "signature": { "type": "string" },
+        "session_id": { "type": "string" },
+        "server_time": { "type": "integer" },
+        "capabilities": { "type": "array", "items": { "type": "string" } },
+        "status": { "$ref": "common.schema.json#/$defs/status" },
+        "trust_mode": { "type": "string", "enum": ["paired_key"] }
+      },
+      "additionalProperties": true
+    }
+  }
+}

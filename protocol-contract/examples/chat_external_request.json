@@ -1,0 +1,21 @@
+{
+  "v": 1,
+  "id": "01HRCHATEXTERNAL000000000",
+  "type": "request",
+  "op": "chat.external",
+  "ts": 1710000600000,
+  "seq": 11,
+  "route": {
+    "src": { "role": "astrbot", "id": "astrbot-main" },
+    "dst": { "role": "standalone", "id": "survival" },
+    "trace_id": "01HRCHATEXTERNALTRACE000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": {
+    "dedupe_key": "qq:group:987654:01HRMSGEXTERNAL000000000",
+    "sender": { "type": "external_user", "platform": "qq", "id": "123456", "name": "Alice", "display_name": "Alice" },
+    "conversation": { "platform": "qq", "type": "group", "id": "987654" },
+    "bridge": { "origin_platform": "qq", "origin_conversation_id": "987654", "suppress_echo": true },
+    "message": { "message_id": "01HRMSGEXTERNAL000000000", "content": "hello from group", "plain_text": "hello from group", "format": "plain", "mentions": [], "created_at": 1710000600000 }
+  }
+}

@@ -1,0 +1,18 @@
+{
+  "v": 1,
+  "id": "01HRAUTH0000000000000000",
+  "type": "auth",
+  "op": "auth.prove_client",
+  "ts": 1710000000200,
+  "seq": 2,
+  "route": {
+    "src": { "role": "astrbot", "id": "astrbot-main" },
+    "dst": { "role": "standalone", "id": "survival" },
+    "trace_id": "01HRHELLOTRACE0000000000"
+  },
+  "payload": {
+    "key_id": "astrbot-main",
+    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA astrbot-main",
+    "signature": "client-signature-base64url-example"
+  }
+}

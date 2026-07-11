@@ -1,0 +1,25 @@
+{
+  "v": 1,
+  "id": "01HRAUTHRESULT0000000000",
+  "type": "auth_result",
+  "op": "auth.result",
+  "ts": 1710000000300,
+  "seq": 2,
+  "route": {
+    "src": { "role": "standalone", "id": "survival" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRHELLOTRACE0000000000"
+  },
+  "status": { "ok": true, "code": "ok", "message": "success" },
+  "payload": {
+    "ok": true,
+    "key_id": "server-main",
+    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB server-main",
+    "signature": "server-signature-base64url-example",
+    "session_id": "01HRSESSION000000000000",
+    "server_time": 1710000000300,
+    "capabilities": ["core.v1", "auth.ed25519.v1", "chat.v1", "player.v1", "server.v1", "command.v1", "ai.v1", "log.v1"],
+    "status": { "ok": true, "code": "ok", "message": "success" },
+    "trust_mode": "paired_key"
+  }
+}

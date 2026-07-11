@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "id": "astrbotadapter",
+  "version": "${version}",
+  "name": "AstrBotAdapter",
+  "description": "AstrBot Minecraft server adapter for Fabric Dedicated Server",
+  "authors": ["Railgun19457"],
+  "contact": {
+    "homepage": "https://github.com/Railgun19457/AstrBotAdapter",
+    "sources": "https://github.com/Railgun19457/AstrBotAdapter"
+  },
+  "license": "MIT",
+  "environment": "server",
+  "entrypoints": {
+    "server": [
+      "io.github.railgun19457.astrbotadapter.platform.fabric.AstrBotAdapterFabricMod"
+    ]
+  },
+  "depends": {
+    "fabricloader": ">=0.15.11",
+    "fabric-api": "*",
+    "minecraft": "1.20.1",
+    "java": ">=17"
+  }
+}

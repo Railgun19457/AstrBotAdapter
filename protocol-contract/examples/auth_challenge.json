@@ -1,0 +1,21 @@
+{
+  "v": 1,
+  "id": "01HRCHALLENGE000000000000",
+  "type": "challenge",
+  "op": "auth.challenge",
+  "ts": 1710000000100,
+  "seq": 1,
+  "route": {
+    "src": { "role": "standalone", "id": "survival" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRHELLOTRACE0000000000"
+  },
+  "payload": {
+    "server_key_id": "server-main",
+    "server_nonce": "server-nonce-32-bytes-example",
+    "challenge_id": "01HRCHALLENGEID000000000",
+    "expires_at": 1710000030100,
+    "selected_v": 1,
+    "capabilities": ["core.v1", "auth.ed25519.v1", "chat.v1", "player.v1", "server.v1", "command.v1", "ai.v1", "log.v1"]
+  }
+}

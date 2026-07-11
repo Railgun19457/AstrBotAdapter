@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "id": "01HRAIGROUPREQ0000000000",
+  "type": "event",
+  "op": "ai.group.request",
+  "ts": 1710001100000,
+  "seq": 21,
+  "route": {
+    "src": { "role": "standalone", "id": "survival" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRAIGROUPTRACE000000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": {
+    "player": { "uuid": "00000000-0000-0000-0000-000000000000", "name": "Steve", "display_name": "Steve", "server_id": "survival" },
+    "message": { "content": "hello ai", "plain_text": "hello ai", "format": "plain", "mentions": [] },
+    "conversation_hint": { "scope": "server", "server_id": "survival" }
+  }
+}

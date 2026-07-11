@@ -1,0 +1,20 @@
+{
+  "v": 1,
+  "id": "01HRPLAYERJOIN00000000000",
+  "type": "event",
+  "op": "player.join",
+  "ts": 1710000700000,
+  "seq": 13,
+  "route": {
+    "src": { "role": "standalone", "id": "survival" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRPLAYERJOINTRACE0000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": {
+    "player": { "uuid": "00000000-0000-0000-0000-000000000000", "name": "Steve", "display_name": "Steve", "server_id": "survival" },
+    "online_count": 10,
+    "max_players": 100,
+    "joined_at": 1710000700000
+  }
+}

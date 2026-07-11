@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://railgun19457.github.io/astrbot-minecraft/player.schema.json",
+  "$defs": {
+    "player_join": {
+      "type": "object",
+      "required": ["player", "online_count", "max_players", "joined_at"],
+      "properties": {
+        "player": { "$ref": "common.schema.json#/$defs/player_ref" },
+        "online_count": { "type": "integer", "minimum": 0 },
+        "max_players": { "type": "integer", "minimum": 0 },
+        "joined_at": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "player_leave": {
+      "type": "object",
+      "required": ["player", "online_count", "max_players", "left_at"],
+      "properties": {
+        "player": { "$ref": "common.schema.json#/$defs/player_ref" },
+        "online_count": { "type": "integer", "minimum": 0 },
+        "max_players": { "type": "integer", "minimum": 0 },
+        "reason": { "type": "string" },
+        "left_at": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "player_list_request": {
+      "type": "object",
+      "required": ["include_details", "include_recent_offline"],
+      "properties": {
+        "include_details": { "type": "boolean" },
+        "include_recent_offline": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "player_list_response": {
+      "type": "object",
+      "required": ["servers", "errors", "generated_at"],
+      "properties": {
+        "servers": { "type": "array" },
+        "errors": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/aggregate_error" } },
+        "generated_at": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "player_detail_request": {
+      "type": "object",
+      "required": ["query", "include_history"],
+      "properties": {
+        "query": {
+          "type": "object",
+          "required": ["type", "value"],
+          "properties": {
+            "type": { "type": "string", "enum": ["name", "uuid"] },
+            "value": { "type": "string", "minLength": 1 }
+          },
+          "additionalProperties": false
+        },
+        "include_history": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "player_detail_response": {
+      "type": "object",
+      "required": ["player"],
+      "properties": {
+        "player": { "type": "object" }
+      },
+      "additionalProperties": true
+    }
+  }
+}

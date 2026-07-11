@@ -1,0 +1,8 @@
+{
+  "id": "astrbotadapter",
+  "name": "AstrBotAdapter",
+  "version": "3.0.0-SNAPSHOT",
+  "description": "AstrBot Minecraft server adapter for Velocity",
+  "authors": ["Railgun19457"],
+  "main": "io.github.railgun19457.astrbotadapter.platform.velocity.AstrBotAdapterVelocityPlugin"
+}

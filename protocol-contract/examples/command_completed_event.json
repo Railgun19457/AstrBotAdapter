@@ -1,0 +1,25 @@
+{
+  "v": 1,
+  "id": "01HRCMDCOMPLETE000000000",
+  "type": "event",
+  "op": "command.completed",
+  "ts": 1710000203500,
+  "seq": 20,
+  "route": {
+    "src": { "role": "standalone", "id": "survival" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRCMDTRACE0000000000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": {
+    "job_id": "01HRCMDJOB0000000000000",
+    "request_id": "01HRCMDREQ00000000000000",
+    "server_id": "survival",
+    "accepted": true,
+    "executed": true,
+    "duration_ms": 3500,
+    "output": "command completed",
+    "exit_code": 0,
+    "completed_at": 1710000203500
+  }
+}

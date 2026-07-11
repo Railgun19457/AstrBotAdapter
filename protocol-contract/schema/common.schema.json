@@ -1,0 +1,168 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://railgun19457.github.io/astrbot-minecraft/common.schema.json",
+  "$defs": {
+    "role": {
+      "type": "string",
+      "enum": ["astrbot", "standalone", "velocity", "backend"]
+    },
+    "server_role": {
+      "type": "string",
+      "enum": ["standalone", "velocity", "backend"]
+    },
+    "node_ref": {
+      "type": "object",
+      "required": ["role", "id"],
+      "properties": {
+        "role": { "$ref": "#/$defs/role" },
+        "id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "route": {
+      "type": "object",
+      "required": ["src", "dst", "trace_id"],
+      "properties": {
+        "src": { "$ref": "#/$defs/node_ref" },
+        "dst": { "$ref": "#/$defs/node_ref" },
+        "trace_id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "origin": {
+      "type": "object",
+      "required": ["role", "id"],
+      "properties": {
+        "role": { "$ref": "#/$defs/role" },
+        "id": { "type": "string", "minLength": 1 },
+        "server_id": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "target": {
+      "type": "object",
+      "required": ["scope"],
+      "properties": {
+        "scope": { "type": "string", "enum": ["self", "server", "all_servers"] },
+        "server_id": { "type": "string" }
+      },
+      "additionalProperties": false,
+      "allOf": [
+        {
+          "if": { "properties": { "scope": { "const": "server" } }, "required": ["scope"] },
+          "then": { "required": ["server_id"] }
+        },
+        {
+          "if": { "properties": { "scope": { "enum": ["self", "all_servers"] } }, "required": ["scope"] },
+          "then": { "not": { "required": ["server_id"] } }
+        }
+      ]
+    },
+    "status": {
+      "type": "object",
+      "required": ["ok", "code", "message"],
+      "properties": {
+        "ok": { "type": "boolean" },
+        "code": {
+          "type": "string",
+          "enum": [
+            "ok",
+            "bad_request",
+            "unauthorized",
+            "auth_failed",
+            "auth_code_invalid",
+            "auth_code_expired",
+            "auth_code_used",
+            "protocol_version_unsupported",
+            "unsupported_operation",
+            "permission_denied",
+            "target_not_found",
+            "target_offline",
+            "timeout",
+            "rate_limited",
+            "command_disabled",
+            "command_blocked",
+            "player_not_found",
+            "player_offline",
+            "backend_disabled",
+            "backend_not_trusted",
+            "payload_too_large",
+            "internal_error"
+          ]
+        },
+        "message": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "actor": {
+      "type": "object",
+      "required": ["type", "platform", "id"],
+      "properties": {
+        "type": { "type": "string", "enum": ["minecraft_player", "external_user"] },
+        "platform": { "type": "string", "minLength": 1 },
+        "id": { "type": "string", "minLength": 1 },
+        "name": { "type": "string" },
+        "display_name": { "type": "string" },
+        "is_operator": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "text_message": {
+      "type": "object",
+      "required": ["content", "plain_text", "format"],
+      "properties": {
+        "message_id": { "type": "string" },
+        "content": { "type": "string" },
+        "plain_text": { "type": "string" },
+        "format": { "type": "string" },
+        "mentions": { "type": "array" },
+        "created_at": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "server_ref": {
+      "type": "object",
+      "required": ["server_id", "role"],
+      "properties": {
+        "server_id": { "type": "string", "minLength": 1 },
+        "display_name": { "type": "string" },
+        "role": { "$ref": "#/$defs/server_role" }
+      },
+      "additionalProperties": true
+    },
+    "player_ref": {
+      "type": "object",
+      "required": ["uuid", "name", "server_id"],
+      "properties": {
+        "uuid": { "type": "string", "minLength": 1 },
+        "name": { "type": "string", "minLength": 1 },
+        "display_name": { "type": "string" },
+        "server_id": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": true
+    },
+    "aggregate_error": {
+      "type": "object",
+      "required": ["server_id", "role", "status"],
+      "properties": {
+        "server_id": { "type": "string", "minLength": 1 },
+        "role": { "$ref": "#/$defs/server_role" },
+        "status": { "$ref": "#/$defs/status" }
+      },
+      "additionalProperties": true
+    },
+    "location": {
+      "type": "object",
+      "required": ["world", "x", "y", "z", "yaw", "pitch"],
+      "properties": {
+        "world": { "type": "string" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "z": { "type": "number" },
+        "yaw": { "type": "number" },
+        "pitch": { "type": "number" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

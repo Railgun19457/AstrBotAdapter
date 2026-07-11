@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "id": "01HRCHATPRIVATE0000000000",
+  "type": "request",
+  "op": "chat.private",
+  "ts": 1710000610000,
+  "seq": 12,
+  "route": {
+    "src": { "role": "astrbot", "id": "astrbot-main" },
+    "dst": { "role": "standalone", "id": "survival" },
+    "trace_id": "01HRCHATPRIVATETRACE000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": {
+    "dedupe_key": "qq:group:987654:private:01HRMSGPRIVATE0000000",
+    "player": { "uuid": "00000000-0000-0000-0000-000000000000", "name": "Steve", "server_id": "survival" },
+    "message": { "content": "private message", "plain_text": "private message", "format": "plain", "mentions": [] }
+  }
+}

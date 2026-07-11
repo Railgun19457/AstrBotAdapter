@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "id": "01HRGOODBYE000000000000",
+  "type": "event",
+  "op": "core.goodbye",
+  "ts": 1710000500000,
+  "seq": 40,
+  "route": {
+    "src": { "role": "standalone", "id": "survival" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRGOODBYETRACE00000000"
+  },
+  "target": { "scope": "self" },
+  "payload": { "reason": "server_shutdown", "message": "server is shutting down", "retry_after_ms": 30000 }
+}

@@ -1,0 +1,76 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://railgun19457.github.io/astrbot-minecraft/server.schema.json",
+  "$defs": {
+    "server_status_request": {
+      "type": "object",
+      "required": ["server_ids", "include_performance"],
+      "properties": {
+        "server_ids": { "type": "array", "items": { "type": "string" } },
+        "include_performance": { "type": "boolean" }
+      },
+      "additionalProperties": true
+    },
+    "server_status_response": {
+      "type": "object",
+      "required": ["servers", "errors", "generated_at"],
+      "properties": {
+        "servers": { "type": "array", "items": { "$ref": "#/$defs/server_status_item" } },
+        "errors": { "type": "array", "items": { "$ref": "common.schema.json#/$defs/aggregate_error" } },
+        "generated_at": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "server_status_item": {
+      "type": "object",
+      "required": ["server_id", "role", "status", "platform", "online_count", "max_players"],
+      "properties": {
+        "server_id": { "type": "string", "minLength": 1 },
+        "display_name": { "type": "string" },
+        "role": { "$ref": "common.schema.json#/$defs/server_role" },
+        "status": { "$ref": "common.schema.json#/$defs/status" },
+        "platform": { "type": "string" },
+        "version": { "type": "string" },
+        "online_count": { "type": "integer", "minimum": 0 },
+        "max_players": { "type": "integer", "minimum": 0 },
+        "uptime_ms": { "type": "integer", "minimum": 0 },
+        "memory": { "$ref": "#/$defs/memory" },
+        "performance": { "$ref": "#/$defs/performance" }
+      },
+      "additionalProperties": true
+    },
+    "server_snapshot": {
+      "type": "object",
+      "required": ["server_id", "role", "online_count", "max_players", "reported_at"],
+      "properties": {
+        "server_id": { "type": "string", "minLength": 1 },
+        "role": { "$ref": "common.schema.json#/$defs/server_role" },
+        "online_count": { "type": "integer", "minimum": 0 },
+        "max_players": { "type": "integer", "minimum": 0 },
+        "uptime_ms": { "type": "integer", "minimum": 0 },
+        "memory": { "$ref": "#/$defs/memory" },
+        "performance": { "$ref": "#/$defs/performance" },
+        "reported_at": { "type": "integer" }
+      },
+      "additionalProperties": true
+    },
+    "memory": {
+      "type": "object",
+      "required": ["used_mb", "max_mb"],
+      "properties": {
+        "used_mb": { "type": "integer", "minimum": 0 },
+        "max_mb": { "type": "integer", "minimum": 0 }
+      },
+      "additionalProperties": false
+    },
+    "performance": {
+      "type": "object",
+      "required": ["tps", "mspt"],
+      "properties": {
+        "tps": { "type": "number" },
+        "mspt": { "type": "number" }
+      },
+      "additionalProperties": false
+    }
+  }
+}

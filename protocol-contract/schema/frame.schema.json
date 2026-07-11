@@ -1,0 +1,85 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://railgun19457.github.io/astrbot-minecraft/frame.schema.json",
+  "title": "AstrBot Minecraft Frame",
+  "type": "object",
+  "required": ["v", "id", "type", "op", "ts", "seq", "route", "payload"],
+  "properties": {
+    "v": { "type": "integer", "minimum": 1 },
+    "id": { "type": "string", "minLength": 1 },
+    "type": {
+      "type": "string",
+      "enum": ["hello", "challenge", "auth", "auth_result", "event", "request", "response", "ack", "heartbeat", "error"]
+    },
+    "op": { "type": "string", "minLength": 1 },
+    "ts": { "type": "integer", "minimum": 1 },
+    "seq": { "type": "integer", "minimum": 1 },
+    "route": { "$ref": "common.schema.json#/$defs/route" },
+    "origin": { "$ref": "common.schema.json#/$defs/origin" },
+    "target": { "$ref": "common.schema.json#/$defs/target" },
+    "reply_to": { "type": "string" },
+    "status": { "$ref": "common.schema.json#/$defs/status" },
+    "payload": true
+  },
+  "allOf": [
+    {
+      "if": { "properties": { "type": { "const": "event" } } },
+      "then": { "required": ["target", "payload"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "request" } } },
+      "then": { "required": ["target", "payload"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "response" } } },
+      "then": { "required": ["reply_to", "status", "payload"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "ack" } } },
+      "then": { "required": ["reply_to", "payload"] }
+    },
+    {
+      "if": { "properties": { "type": { "const": "error" } } },
+      "then": { "required": ["status"] }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "properties": { "ok": { "const": true } },
+            "required": ["ok"]
+          }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "properties": { "code": { "const": "ok" } },
+            "required": ["code"]
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "properties": { "ok": { "const": false } },
+            "required": ["ok"]
+          }
+        },
+        "required": ["status"]
+      },
+      "then": {
+        "properties": {
+          "status": {
+            "properties": { "code": { "not": { "const": "ok" } } },
+            "required": ["code"]
+          }
+        }
+      }
+    }
+  ],
+  "additionalProperties": true
+}

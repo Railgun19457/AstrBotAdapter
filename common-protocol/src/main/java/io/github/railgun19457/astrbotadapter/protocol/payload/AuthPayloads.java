@@ -1,0 +1,25 @@
+package io.github.railgun19457.astrbotadapter.protocol.payload;
+
+import io.github.railgun19457.astrbotadapter.protocol.Status;
+
+import java.util.List;
+
+public final class AuthPayloads {
+    private AuthPayloads() {
+    }
+
+    public record ProtocolRange(String name, int minV, int maxV) {
+    }
+
+    public record AuthHelloPayload(ProtocolRange protocol, String keyId, String clientNonce, String authCode, List<String> capabilities) {
+    }
+
+    public record AuthChallengePayload(String serverKeyId, String serverNonce, String challengeId, long expiresAt, int selectedV, List<String> capabilities) {
+    }
+
+    public record AuthPayload(String keyId, String publicKey, String signature) {
+    }
+
+    public record AuthResultPayload(boolean ok, String keyId, String publicKey, String signature, String sessionId, Long serverTime, List<String> capabilities, Status status, String trustMode) {
+    }
+}

@@ -1,0 +1,32 @@
+{
+  "v": 1,
+  "id": "01HRLOGQUERYRESP00000000",
+  "type": "response",
+  "op": "log.query",
+  "ts": 1710001200500,
+  "seq": 25,
+  "route": {
+    "src": { "role": "velocity", "id": "velocity-main" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRLOGQUERYTRACE00000"
+  },
+  "reply_to": "01HRLOGQUERYREQ000000000",
+  "status": { "ok": true, "code": "ok", "message": "partial success" },
+  "payload": {
+    "servers": [
+      {
+        "server_id": "survival",
+        "role": "backend",
+        "status": { "ok": true, "code": "ok", "message": "success" },
+        "truncated": false,
+        "lines": [
+          { "ts": 1710000900000, "level": "INFO", "message": "Steve joined the game" }
+        ]
+      }
+    ],
+    "errors": [
+      { "server_id": "lobby", "role": "backend", "status": { "ok": false, "code": "target_offline", "message": "backend is offline" } }
+    ],
+    "generated_at": 1710001200500
+  }
+}

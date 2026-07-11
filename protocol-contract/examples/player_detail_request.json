@@ -1,0 +1,15 @@
+{
+  "v": 1,
+  "id": "01HRPLAYERDETAILREQ000000",
+  "type": "request",
+  "op": "player.detail",
+  "ts": 1710000910000,
+  "seq": 16,
+  "route": {
+    "src": { "role": "astrbot", "id": "astrbot-main" },
+    "dst": { "role": "standalone", "id": "survival" },
+    "trace_id": "01HRPLAYERDETAILTRACE00"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": { "query": { "type": "name", "value": "Steve" }, "include_history": true }
+}

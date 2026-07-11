@@ -1,0 +1,17 @@
+{
+  "protocol": "ASTRBOT-MC-AUTH-V1",
+  "client_private_key_pkcs8_base64": "MC4CAQAwBQYDK2VwBCIEIC21fxxQmFArFPb5cFSkfdrhrz6kxRytvXYAT2pN8jda",
+  "server_private_key_pkcs8_base64": "MC4CAQAwBQYDK2VwBCIEICoADKFlR1c20RiI8rQTWAiliao+M+fcJHfQA+mEig9O",
+  "client_public_key_raw_base64url": "dTPaJvdM1b67F4vIz2nLOFgbrxNt-GXbusomWp1uQUY",
+  "server_public_key_raw_base64url": "Q1x9kwjvodNp6Lp8sdvGAsOnenrqzunfBhi1wPkMhOU",
+  "client_public_key_sha256": "L2ibKb_J2W5uL2HAAYdqX9OWfgF_Z6F7CAEe2RDv6KE",
+  "server_public_key_sha256": "6_9civbPTQ2shNDoxzD2zAdViUeNyZDuID0iny6k2UA",
+  "client_capabilities_sha256": "VVAeaixHcIxR20defdHd8JIsQh8kQISl4rKUsfHVxIo",
+  "server_capabilities_sha256": "VVAeaixHcIxR20defdHd8JIsQh8kQISl4rKUsfHVxIo",
+  "client_transcript": "ASTRBOT-MC-AUTH-V1\ndirection=client-prove\nselected_v=1\nclient_min_v=1\nclient_max_v=1\nconnection_role=astrbot-to-standalone\nclient_role=astrbot\nclient_id=astrbot-main\nserver_role=standalone\nserver_id=survival\nclient_key_id=astrbot-main\nserver_key_id=server-main\nclient_public_key_sha256=L2ibKb_J2W5uL2HAAYdqX9OWfgF_Z6F7CAEe2RDv6KE\nexpected_server_public_key_sha256=\nclient_nonce=client-nonce-vector\nserver_nonce=server-nonce-vector\nchallenge_id=01HRCHALLENGEID000000000\nchallenge_expires_at=1710000030100\nhello_id=01HRHELLO0000000000000000\nchallenge_frame_id=01HRCHALLENGE000000000000\nclient_hello_ts=1710000000000\nauth_ts=1710000000200\nclient_capabilities_sha256=VVAeaixHcIxR20defdHd8JIsQh8kQISl4rKUsfHVxIo\nserver_capabilities_sha256=VVAeaixHcIxR20defdHd8JIsQh8kQISl4rKUsfHVxIo\n",
+  "server_transcript": "ASTRBOT-MC-AUTH-V1\ndirection=server-prove\nselected_v=1\nclient_min_v=1\nclient_max_v=1\nconnection_role=astrbot-to-standalone\nclient_role=astrbot\nclient_id=astrbot-main\nserver_role=standalone\nserver_id=survival\nclient_key_id=astrbot-main\nserver_key_id=server-main\nclient_public_key_sha256=L2ibKb_J2W5uL2HAAYdqX9OWfgF_Z6F7CAEe2RDv6KE\nserver_public_key_sha256=6_9civbPTQ2shNDoxzD2zAdViUeNyZDuID0iny6k2UA\nclient_nonce=client-nonce-vector\nserver_nonce=server-nonce-vector\nchallenge_id=01HRCHALLENGEID000000000\nchallenge_expires_at=1710000030100\nhello_id=01HRHELLO0000000000000000\nchallenge_frame_id=01HRCHALLENGE000000000000\nauth_frame_id=01HRAUTH0000000000000000\nauth_result_ts=1710000000300\nclient_signature_sha256=wITty5TC2-oaTANK_gsa5wlUSpEvG7wYlU9aETBKes0\nclient_capabilities_sha256=VVAeaixHcIxR20defdHd8JIsQh8kQISl4rKUsfHVxIo\nserver_capabilities_sha256=VVAeaixHcIxR20defdHd8JIsQh8kQISl4rKUsfHVxIo\n",
+  "client_signature_base64url": "f1L6VZqeC3kv7gJmh4fq68_tHY_o3xKlzUUlwtY652PgsViiOACOL4fXwYvBUXdnhuEyT6QQI63AXak5GxFEBw",
+  "server_signature_base64url": "QZgCGYmGe_86B28xw7YL6OSi7ZQ5pgKwBbuPBvjmV_aNoib55sVkAG7SLiiaWt3buQLBEHn-ZswDdPqldhr2CA",
+  "client_signature_sha256": "wITty5TC2-oaTANK_gsa5wlUSpEvG7wYlU9aETBKes0",
+  "server_signature_sha256": "mCQDyB-lkCAx6LQz2k1PGmn4qsDTIyp_PqUM0iVATaQ"
+}

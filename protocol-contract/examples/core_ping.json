@@ -1,0 +1,14 @@
+{
+  "v": 1,
+  "id": "01HRPING0000000000000000",
+  "type": "heartbeat",
+  "op": "core.ping",
+  "ts": 1710000300000,
+  "seq": 30,
+  "route": {
+    "src": { "role": "astrbot", "id": "astrbot-main" },
+    "dst": { "role": "standalone", "id": "survival" },
+    "trace_id": "01HRPINGTRACE0000000000"
+  },
+  "payload": { "session_id": "01HRSESSION000000000000" }
+}

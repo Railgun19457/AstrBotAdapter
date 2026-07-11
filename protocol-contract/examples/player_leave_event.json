@@ -1,0 +1,21 @@
+{
+  "v": 1,
+  "id": "01HRPLAYERLEAVE0000000000",
+  "type": "event",
+  "op": "player.leave",
+  "ts": 1710000800000,
+  "seq": 14,
+  "route": {
+    "src": { "role": "standalone", "id": "survival" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRPLAYERLEAVETRACE000"
+  },
+  "target": { "scope": "server", "server_id": "survival" },
+  "payload": {
+    "player": { "uuid": "00000000-0000-0000-0000-000000000000", "name": "Steve", "display_name": "Steve", "server_id": "survival" },
+    "online_count": 9,
+    "max_players": 100,
+    "reason": "disconnect",
+    "left_at": 1710000800000
+  }
+}
