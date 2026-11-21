@@ -6,7 +6,7 @@ import io.github.railgun19457.astrbotadapter.platform.spi.PlatformPlayerEvent;
 import net.fabricmc.fabric.api.message.v1.ServerMessageEvents;
 import net.fabricmc.fabric.api.networking.v1.ServerPlayConnectionEvents;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
+import net.minecraft.server.level.ServerPlayer;
 
 final class FabricEventSource implements PlatformEventSource {
     private final MinecraftServer server;
@@ -50,33 +50,50 @@ final class FabricEventSource implements PlatformEventSource {
         }
         ServerMessageEvents.CHAT_MESSAGE.register((message, sender, params) -> {
             if (chatListener != null) {
-                chatListener.onChat(new PlatformChatEvent(sender.getUuid(), sender.getGameProfile().getName(), message.getContent().getString(), worldName(sender)));
+                chatListener.onChat(new PlatformChatEvent(
+                    sender.getUUID(),
+                    sender.getGameProfile().name(),
+                    message.decoratedContent().getString(),
+                    worldName(sender)
+                ));
             }
         });
         ServerPlayConnectionEvents.JOIN.register((handler, sender, ignoredServer) -> {
             if (joinListener != null) {
-                ServerPlayerEntity player = handler.player;
-                joinListener.onJoin(new PlatformPlayerEvent(player.getUuid(), player.getGameProfile().getName(), onlineCount(), maxPlayers(), null));
+                ServerPlayer player = handler.player;
+                joinListener.onJoin(new PlatformPlayerEvent(
+                    player.getUUID(),
+                    player.getGameProfile().name(),
+                    onlineCount(),
+                    maxPlayers(),
+                    null
+                ));
             }
         });
         ServerPlayConnectionEvents.DISCONNECT.register((handler, ignoredServer) -> {
             if (leaveListener != null) {
-                ServerPlayerEntity player = handler.player;
-                leaveListener.onLeave(new PlatformPlayerEvent(player.getUuid(), player.getGameProfile().getName(), Math.max(0, onlineCount() - 1), maxPlayers(), null));
+                ServerPlayer player = handler.player;
+                leaveListener.onLeave(new PlatformPlayerEvent(
+                    player.getUUID(),
+                    player.getGameProfile().name(),
+                    Math.max(0, onlineCount() - 1),
+                    maxPlayers(),
+                    null
+                ));
             }
         });
         registered = true;
     }
 
     private int onlineCount() {
-        return server.getPlayerManager().getPlayerList().size();
+        return server.getPlayerList().getPlayers().size();
     }
 
     private int maxPlayers() {
-        return server.getPlayerManager().getMaxPlayerCount();
+        return server.getMaxPlayers();
     }
 
-    private String worldName(ServerPlayerEntity player) {
-        return player.getWorld().getRegistryKey().getValue().toString();
+    private String worldName(ServerPlayer player) {
+        return player.level().dimension().identifier().toString();
     }
 }

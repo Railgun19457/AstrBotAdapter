@@ -1,0 +1,19 @@
+{
+  "v": 1,
+  "id": "01HRPAIRPROVE000000000000",
+  "type": "auth",
+  "op": "pair.prove",
+  "ts": 1710000000200,
+  "seq": 2,
+  "route": {
+    "src": { "role": "astrbot", "id": "astrbot-main" },
+    "dst": { "role": "standalone", "id": "survival" },
+    "trace_id": "01HRPAIRTRACE0000000000"
+  },
+  "payload": {
+    "key_id": "astrbot-main",
+    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA astrbot-main",
+    "client_public_value": "srp-client-public-value-base64url-example",
+    "client_proof": "srp-client-proof-base64url-example"
+  }
+}

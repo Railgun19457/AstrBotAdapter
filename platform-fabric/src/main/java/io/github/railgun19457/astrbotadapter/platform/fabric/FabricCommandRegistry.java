@@ -5,15 +5,14 @@ import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import io.github.railgun19457.astrbotadapter.platform.spi.PlatformCommandRegistry;
 import io.github.railgun19457.astrbotadapter.platform.spi.PlatformRuntimeControl;
 import net.fabricmc.fabric.api.command.v2.CommandRegistrationCallback;
-import net.minecraft.server.command.ServerCommandSource;
-import net.minecraft.text.Text;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.Commands;
+import net.minecraft.network.chat.Component;
+import net.minecraft.server.permissions.Permissions;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
-
-import static net.minecraft.server.command.CommandManager.argument;
-import static net.minecraft.server.command.CommandManager.literal;
 
 final class FabricCommandRegistry implements PlatformCommandRegistry {
     private static volatile PlatformRuntimeControl runtime;
@@ -41,10 +40,10 @@ final class FabricCommandRegistry implements PlatformCommandRegistry {
         runtime = null;
     }
 
-    private static LiteralArgumentBuilder<ServerCommandSource> command(String label) {
-        return literal(label)
+    private static LiteralArgumentBuilder<CommandSourceStack> command(String label) {
+        return Commands.literal(label)
             .executes(context -> execute(context.getSource(), label, new String[0]))
-            .then(argument("args", StringArgumentType.greedyString())
+            .then(Commands.argument("args", StringArgumentType.greedyString())
                 .suggests((context, builder) -> {
                     suggest(builder.getRemaining(), builder::suggest);
                     return builder.buildFuture();
@@ -52,7 +51,7 @@ final class FabricCommandRegistry implements PlatformCommandRegistry {
                 .executes(context -> execute(context.getSource(), label, split(StringArgumentType.getString(context, "args")))));
     }
 
-    private static int execute(ServerCommandSource source, String label, String[] args) {
+    private static int execute(CommandSourceStack source, String label, String[] args) {
         PlatformRuntimeControl current = runtime;
         if (current == null) {
             send(source, "AstrBotAdapter is not ready");
@@ -64,7 +63,7 @@ final class FabricCommandRegistry implements PlatformCommandRegistry {
             send(source, "/" + label + " connections");
             send(source, "/" + label + " auth create [target]");
             send(source, "/" + label + " auth list");
-            send(source, "/" + label + " auth revoke <code>");
+            send(source, "/" + label + " auth revoke <pairing_id>");
             send(source, "/" + label + " auth revoke key <domain> <key_id>");
             send(source, "/" + label + " auth key regen");
             return 1;
@@ -99,24 +98,24 @@ final class FabricCommandRegistry implements PlatformCommandRegistry {
         return 0;
     }
 
-    private static int handleAuth(ServerCommandSource source, PlatformRuntimeControl current, String[] args) {
+    private static int handleAuth(CommandSourceStack source, PlatformRuntimeControl current, String[] args) {
         if (args.length < 2) {
             send(source, "Usage: /astrbot auth <create|list|revoke|key>");
             return 0;
         }
         if ("create".equalsIgnoreCase(args[1])) {
             String target = args.length >= 3 ? args[2] : null;
-            send(source, "Auth code: " + current.createAuthCode(target));
+            send(source, "Pairing: " + current.createPairingCode(target));
             return 1;
         }
         if ("list".equalsIgnoreCase(args[1])) {
-            send(source, current.listAuthCodes());
+            send(source, current.listPairingCodes());
             send(source, current.listTrustedKeys());
             return 1;
         }
         if ("revoke".equalsIgnoreCase(args[1])) {
             if (args.length < 3) {
-                send(source, "Usage: /astrbot auth revoke <code> OR /astrbot auth revoke key <domain> <key_id>");
+                send(source, "Usage: /astrbot auth revoke <pairing_id> OR /astrbot auth revoke key <domain> <key_id>");
                 return 0;
             }
             if ("key".equalsIgnoreCase(args[2])) {
@@ -127,7 +126,7 @@ final class FabricCommandRegistry implements PlatformCommandRegistry {
                 send(source, current.revokeTrustedKey(args[3], args[4]) ? "Trusted key revoked" : "Trusted key not found");
                 return 1;
             }
-            send(source, current.revokeAuthCode(args[2]) ? "Auth code revoked" : "Auth code not found");
+            send(source, current.revokePairingCode(args[2]) ? "Pairing revoked" : "Pairing ID not found");
             return 1;
         }
         if ("key".equalsIgnoreCase(args[1])) {
@@ -142,11 +141,11 @@ final class FabricCommandRegistry implements PlatformCommandRegistry {
         return 0;
     }
 
-    private static boolean requireAdmin(ServerCommandSource source) {
-        if (source.hasPermissionLevel(4)) {
+    private static boolean requireAdmin(CommandSourceStack source) {
+        if (source.permissions().hasPermission(Permissions.COMMANDS_OWNER)) {
             return true;
         }
-        source.sendError(Text.literal("You do not have permission: astrbot.admin"));
+        source.sendFailure(Component.literal("You do not have permission: astrbot.admin"));
         return false;
     }
 
@@ -172,8 +171,8 @@ final class FabricCommandRegistry implements PlatformCommandRegistry {
         }
     }
 
-    private static void send(ServerCommandSource source, String message) {
-        source.sendFeedback(() -> Text.literal(message), false);
+    private static void send(CommandSourceStack source, String message) {
+        source.sendSuccess(() -> Component.literal(message), false);
     }
 
     @FunctionalInterface

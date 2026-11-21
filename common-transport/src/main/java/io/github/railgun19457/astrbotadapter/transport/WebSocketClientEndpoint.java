@@ -207,7 +207,7 @@ public final class WebSocketClientEndpoint implements TransportEndpoint {
             if (frame.type() == FrameType.HEARTBEAT && Ops.CORE_PONG.equals(frame.op())) {
                 handlePong(frame);
             }
-            responder.onFrame(frame).whenComplete((response, throwable) -> {
+            responder.onFrame("client", frame).whenComplete((response, throwable) -> {
                 if (throwable != null) {
                     logger.error("Failed to handle frame " + frame.id(), throwable);
                     return;
@@ -301,6 +301,7 @@ public final class WebSocketClientEndpoint implements TransportEndpoint {
 
         @Override
         public void onClose(int code, String reason, boolean remote) {
+            responder.onConnectionClosed("client");
             logger.info("WebSocket client closed: " + reason + " (" + code + ")");
             state = SessionState.AUTHENTICATING;
             authenticatedRole = null;

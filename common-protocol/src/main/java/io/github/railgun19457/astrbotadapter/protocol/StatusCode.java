@@ -8,6 +8,8 @@ public enum StatusCode {
     AUTH_CODE_INVALID("auth_code_invalid"),
     AUTH_CODE_EXPIRED("auth_code_expired"),
     AUTH_CODE_USED("auth_code_used"),
+    AUTH_CODE_ATTEMPTS_EXCEEDED("auth_code_attempts_exceeded"),
+    PAIRING_FAILED("pairing_failed"),
     PROTOCOL_VERSION_UNSUPPORTED("protocol_version_unsupported"),
     UNSUPPORTED_OPERATION("unsupported_operation"),
     PERMISSION_DENIED("permission_denied"),

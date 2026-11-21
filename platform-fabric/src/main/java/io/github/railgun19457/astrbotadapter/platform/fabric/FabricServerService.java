@@ -29,14 +29,20 @@ final class FabricServerService implements PlatformServerService {
             role,
             Status.success(),
             "fabric",
-            server.getVersion(),
-            server.getPlayerManager().getPlayerList().size(),
-            server.getPlayerManager().getMaxPlayerCount()
+            server.getServerVersion(),
+            server.getPlayerList().getPlayerCount(),
+            server.getMaxPlayers()
         ));
     }
 
     @Override
     public ServerSnapshot snapshot() {
-        return new ServerSnapshot("standalone", role, server.getPlayerManager().getPlayerList().size(), server.getPlayerManager().getMaxPlayerCount(), System.currentTimeMillis());
+        return new ServerSnapshot(
+            "standalone",
+            role,
+            server.getPlayerList().getPlayerCount(),
+            server.getMaxPlayers(),
+            System.currentTimeMillis()
+        );
     }
 }

@@ -81,8 +81,7 @@ public final class ConfigService {
         }
         return new VelocityBackendConfig(
             string(map, "backend_id", defaults.backendId()),
-            string(map, "velocity_url", defaults.velocityUrl()),
-            string(map, "auth_code", defaults.authCode())
+            string(map, "velocity_url", defaults.velocityUrl())
         );
     }
 
@@ -221,7 +220,6 @@ public final class ConfigService {
         Map<String, Object> map = new LinkedHashMap<>();
         map.put("backend_id", config.backendId());
         map.put("velocity_url", config.velocityUrl());
-        map.put("auth_code", config.authCode());
         return map;
     }
 

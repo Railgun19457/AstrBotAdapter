@@ -6,6 +6,8 @@
   "auth_code_invalid",
   "auth_code_expired",
   "auth_code_used",
+  "auth_code_attempts_exceeded",
+  "pairing_failed",
   "protocol_version_unsupported",
   "unsupported_operation",
   "permission_denied",

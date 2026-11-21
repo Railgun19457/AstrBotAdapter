@@ -38,7 +38,7 @@ final class FabricPlatformScheduler implements PlatformScheduler {
 
     @Override
     public void global(Runnable task) {
-        if (server.isOnThread()) {
+        if (server.isSameThread()) {
             task.run();
         } else {
             server.execute(task);

@@ -13,4 +13,5 @@ tasks.jar {
     dependsOn(configurations.runtimeClasspath)
     archiveFileName.set("AstrBotAdapter-v${project.version}-Folia.jar")
     from({ configurations.runtimeClasspath.get().filter { it.exists() }.map { if (it.isDirectory) it else zipTree(it) } })
+    exclude("META-INF/*.SF", "META-INF/*.DSA", "META-INF/*.RSA")
 }

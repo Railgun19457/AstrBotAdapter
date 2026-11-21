@@ -1,0 +1,20 @@
+{
+  "v": 1,
+  "id": "01HRPAIRINIT000000000000",
+  "type": "hello",
+  "op": "pair.init",
+  "ts": 1710000000000,
+  "seq": 1,
+  "route": {
+    "src": { "role": "astrbot", "id": "astrbot-main" },
+    "dst": { "role": "standalone", "id": "survival" },
+    "trace_id": "01HRPAIRTRACE0000000000"
+  },
+  "payload": {
+    "protocol": { "name": "astrbot-minecraft", "min_v": 1, "max_v": 1 },
+    "key_id": "astrbot-main",
+    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA astrbot-main",
+    "pairing_id": "01HRPAIRING000000000000",
+    "capabilities": ["core.v1", "auth.ed25519.v1", "auth.srp6a-pairing.v1"]
+  }
+}

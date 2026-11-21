@@ -1,6 +1,7 @@
 [
   "core.v1",
   "auth.ed25519.v1",
+  "auth.srp6a-pairing.v1",
   "chat.v1",
   "player.v1",
   "server.v1",

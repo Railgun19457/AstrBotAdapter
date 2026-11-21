@@ -1,0 +1,26 @@
+{
+  "v": 1,
+  "id": "01HRPAIRCOMPLETE000000000",
+  "type": "auth_result",
+  "op": "pair.complete",
+  "ts": 1710000000300,
+  "seq": 2,
+  "route": {
+    "src": { "role": "standalone", "id": "survival" },
+    "dst": { "role": "astrbot", "id": "astrbot-main" },
+    "trace_id": "01HRPAIRTRACE0000000000"
+  },
+  "status": { "ok": true, "code": "ok", "message": "success" },
+  "payload": {
+    "ok": true,
+    "key_id": "server-main",
+    "public_key": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB server-main",
+    "server_proof": "srp-server-proof-base64url-example",
+    "key_binding": "srp-key-binding-base64url-example",
+    "session_id": "01HRSESSION000000000000",
+    "server_time": 1710000000300,
+    "capabilities": ["core.v1", "auth.ed25519.v1", "auth.srp6a-pairing.v1"],
+    "status": { "ok": true, "code": "ok", "message": "success" },
+    "trust_mode": "srp_paired_key"
+  }
+}

@@ -3,6 +3,7 @@ package io.github.railgun19457.astrbotadapter.core;
 public final class CapabilityNames {
     public static final String CORE_V1 = "core.v1";
     public static final String AUTH_ED25519_V1 = "auth.ed25519.v1";
+    public static final String AUTH_SRP6A_PAIRING_V1 = "auth.srp6a-pairing.v1";
     public static final String CHAT_V1 = "chat.v1";
     public static final String PLAYER_V1 = "player.v1";
     public static final String SERVER_V1 = "server.v1";

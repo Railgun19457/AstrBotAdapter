@@ -22,6 +22,7 @@ final class CapabilityContractTest {
         Set<String> implementation = Set.of(
             CapabilityNames.CORE_V1,
             CapabilityNames.AUTH_ED25519_V1,
+            CapabilityNames.AUTH_SRP6A_PAIRING_V1,
             CapabilityNames.CHAT_V1,
             CapabilityNames.PLAYER_V1,
             CapabilityNames.SERVER_V1,

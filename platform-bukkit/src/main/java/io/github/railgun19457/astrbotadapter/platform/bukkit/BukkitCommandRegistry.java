@@ -47,7 +47,7 @@ public final class BukkitCommandRegistry implements PlatformCommandRegistry, Com
             sender.sendMessage("/" + label + " connections");
             sender.sendMessage("/" + label + " auth create [target]");
             sender.sendMessage("/" + label + " auth list");
-            sender.sendMessage("/" + label + " auth revoke <code>");
+            sender.sendMessage("/" + label + " auth revoke <pairing_id>");
             sender.sendMessage("/" + label + " auth revoke key <domain> <key_id>");
             sender.sendMessage("/" + label + " auth key regen");
             return true;
@@ -89,17 +89,17 @@ public final class BukkitCommandRegistry implements PlatformCommandRegistry, Com
         }
         if ("create".equalsIgnoreCase(args[1])) {
             String target = args.length >= 3 ? args[2] : null;
-            sender.sendMessage("Auth code: " + runtime.createAuthCode(target));
+            sender.sendMessage("Pairing: " + runtime.createPairingCode(target));
             return true;
         }
         if ("list".equalsIgnoreCase(args[1])) {
-            sender.sendMessage(runtime.listAuthCodes());
+            sender.sendMessage(runtime.listPairingCodes());
             sender.sendMessage(runtime.listTrustedKeys());
             return true;
         }
         if ("revoke".equalsIgnoreCase(args[1])) {
             if (args.length < 3) {
-                sender.sendMessage("Usage: /astrbot auth revoke <code> OR /astrbot auth revoke key <domain> <key_id>");
+                sender.sendMessage("Usage: /astrbot auth revoke <pairing_id> OR /astrbot auth revoke key <domain> <key_id>");
                 return true;
             }
             if ("key".equalsIgnoreCase(args[2])) {
@@ -110,7 +110,7 @@ public final class BukkitCommandRegistry implements PlatformCommandRegistry, Com
                 sender.sendMessage(runtime.revokeTrustedKey(args[3], args[4]) ? "Trusted key revoked" : "Trusted key not found");
                 return true;
             }
-            sender.sendMessage(runtime.revokeAuthCode(args[2]) ? "Auth code revoked" : "Auth code not found");
+            sender.sendMessage(runtime.revokePairingCode(args[2]) ? "Pairing revoked" : "Pairing ID not found");
             return true;
         }
         if ("key".equalsIgnoreCase(args[1])) {

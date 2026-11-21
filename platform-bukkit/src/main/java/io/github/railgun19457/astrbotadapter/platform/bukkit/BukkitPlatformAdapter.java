@@ -39,6 +39,8 @@ final class BukkitPlatformAdapter implements PlatformAdapter {
     private final PlatformLogService logService;
     private final PlatformPermissionService permissionService;
 
+    private final java.util.concurrent.atomic.AtomicReference<String> configuredServerId = new java.util.concurrent.atomic.AtomicReference<>("standalone");
+
     BukkitPlatformAdapter(JavaPlugin plugin) {
         this.plugin = plugin;
         Path dataDirectory = plugin.getDataFolder().toPath();
@@ -47,13 +49,29 @@ final class BukkitPlatformAdapter implements PlatformAdapter {
         this.configStore = NoopPlatformComponents.configStore(dataDirectory);
         this.keyStore = NoopPlatformComponents.keyStore(dataDirectory.resolve("keys"));
         this.commandRegistry = new BukkitCommandRegistry(plugin);
-        this.eventSource = new BukkitEventSource(plugin);
-        this.playerService = new BukkitPlayerService(plugin, scheduler);
-        this.chatService = new BukkitChatService(plugin, scheduler);
+        BukkitChatService chat = new BukkitChatService(plugin, scheduler);
+        this.chatService = chat;
+        this.eventSource = new BukkitEventSource(plugin, () -> chat);
+        this.playerService = new BukkitPlayerService(plugin, scheduler, configuredServerId::get);
         this.commandService = new BukkitCommandService(plugin, scheduler);
-        this.serverService = new BukkitServerService(plugin, scheduler);
+        this.serverService = new BukkitServerService(plugin, scheduler, configuredServerId::get);
         this.logService = new BukkitLogService(plugin, scheduler);
         this.permissionService = new BukkitPermissionService(plugin);
+        // Prefer config.yml server_id when present so status/player payloads stay consistent.
+        try {
+            Path configPath = dataDirectory.resolve("config.yml");
+            if (java.nio.file.Files.exists(configPath)) {
+                Object loaded = new org.yaml.snakeyaml.Yaml().load(java.nio.file.Files.newBufferedReader(configPath));
+                if (loaded instanceof java.util.Map<?, ?> map) {
+                    Object serverId = map.get("server_id");
+                    if (serverId != null && !serverId.toString().isBlank()) {
+                        configuredServerId.set(serverId.toString().trim());
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+            // Fall back to platform default until CoreRuntime loads config.
+        }
     }
 
     @Override
@@ -62,7 +80,7 @@ final class BukkitPlatformAdapter implements PlatformAdapter {
             plugin.getServer().getName().toLowerCase(Locale.ROOT),
             plugin.getServer().getBukkitVersion(),
             plugin.getServer().getMinecraftVersion(),
-            "standalone",
+            configuredServerId.get(),
             plugin.getServer().getName(),
             ServerRole.STANDALONE
         );

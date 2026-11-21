@@ -9,20 +9,27 @@ import io.github.railgun19457.astrbotadapter.protocol.Status;
 import org.bukkit.plugin.Plugin;
 
 import java.util.concurrent.CompletionStage;
+import java.util.function.Supplier;
 
 public final class BukkitServerService implements PlatformServerService {
     private final Plugin plugin;
     private final PlatformScheduler scheduler;
+    private final Supplier<String> serverIdSupplier;
 
     public BukkitServerService(Plugin plugin, PlatformScheduler scheduler) {
+        this(plugin, scheduler, () -> "standalone");
+    }
+
+    public BukkitServerService(Plugin plugin, PlatformScheduler scheduler, Supplier<String> serverIdSupplier) {
         this.plugin = plugin;
         this.scheduler = scheduler;
+        this.serverIdSupplier = serverIdSupplier == null ? () -> "standalone" : serverIdSupplier;
     }
 
     @Override
     public CompletionStage<ServerStatusItem> status(boolean includePerformance) {
         return scheduler.callGlobal(() -> new ServerStatusItem(
-            "standalone",
+            serverIdSupplier.get(),
             plugin.getServer().getName(),
             ServerRole.STANDALONE,
             Status.success(),
@@ -35,6 +42,6 @@ public final class BukkitServerService implements PlatformServerService {
 
     @Override
     public ServerSnapshot snapshot() {
-        return new ServerSnapshot("standalone", ServerRole.STANDALONE, plugin.getServer().getOnlinePlayers().size(), plugin.getServer().getMaxPlayers(), System.currentTimeMillis());
+        return new ServerSnapshot(serverIdSupplier.get(), ServerRole.STANDALONE, plugin.getServer().getOnlinePlayers().size(), plugin.getServer().getMaxPlayers(), System.currentTimeMillis());
     }
 }

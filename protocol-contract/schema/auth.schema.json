@@ -18,10 +18,9 @@
         },
         "key_id": { "type": "string", "minLength": 1 },
         "client_nonce": { "type": "string", "minLength": 1 },
-        "auth_code": { "type": "string" },
         "capabilities": { "type": "array", "items": { "type": "string" } }
       },
-      "additionalProperties": true
+      "additionalProperties": false
     },
     "auth_challenge": {
       "type": "object",
@@ -61,6 +60,62 @@
         "trust_mode": { "type": "string", "enum": ["paired_key"] }
       },
       "additionalProperties": true
+    },
+    "pair_init": {
+      "type": "object",
+      "required": ["protocol", "key_id", "public_key", "pairing_id", "capabilities"],
+      "properties": {
+        "protocol": { "$ref": "#/$defs/auth_hello/properties/protocol" },
+        "key_id": { "type": "string", "minLength": 1 },
+        "public_key": { "type": "string", "minLength": 1 },
+        "pairing_id": { "type": "string", "minLength": 1 },
+        "capabilities": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "pair_challenge": {
+      "type": "object",
+      "required": ["pairing_id", "suite", "salt", "server_public_value", "server_key_id", "server_public_key", "expires_at", "selected_v", "capabilities"],
+      "properties": {
+        "pairing_id": { "type": "string", "minLength": 1 },
+        "suite": { "const": "srp-6a-rfc5054-sha256-2048" },
+        "salt": { "type": "string", "minLength": 1 },
+        "server_public_value": { "type": "string", "minLength": 1 },
+        "server_key_id": { "type": "string", "minLength": 1 },
+        "server_public_key": { "type": "string", "minLength": 1 },
+        "expires_at": { "type": "integer" },
+        "selected_v": { "type": "integer", "minimum": 1 },
+        "capabilities": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "pair_prove": {
+      "type": "object",
+      "required": ["key_id", "public_key", "client_public_value", "client_proof"],
+      "properties": {
+        "key_id": { "type": "string", "minLength": 1 },
+        "public_key": { "type": "string", "minLength": 1 },
+        "client_public_value": { "type": "string", "minLength": 1 },
+        "client_proof": { "type": "string", "minLength": 1 }
+      },
+      "additionalProperties": false
+    },
+    "pair_complete": {
+      "type": "object",
+      "required": ["ok", "key_id", "public_key", "server_proof", "key_binding", "session_id", "server_time", "capabilities", "status", "trust_mode"],
+      "properties": {
+        "ok": { "const": true },
+        "key_id": { "type": "string", "minLength": 1 },
+        "public_key": { "type": "string", "minLength": 1 },
+        "server_proof": { "type": "string", "minLength": 1 },
+        "key_binding": { "type": "string", "minLength": 1 },
+        "session_id": { "type": "string", "minLength": 1 },
+        "server_time": { "type": "integer" },
+        "capabilities": { "type": "array", "items": { "type": "string" } },
+        "status": { "$ref": "common.schema.json#/$defs/status" },
+        "trust_mode": { "const": "srp_paired_key" }
+      },
+      "additionalProperties": false
     }
   }
 }

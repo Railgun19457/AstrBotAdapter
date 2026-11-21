@@ -18,8 +18,8 @@ import io.github.railgun19457.astrbotadapter.platform.spi.PlatformTextService;
 import io.github.railgun19457.astrbotadapter.platform.spi.RuntimeMode;
 import io.github.railgun19457.astrbotadapter.platform.spi.support.NoopPlatformComponents;
 import io.github.railgun19457.astrbotadapter.protocol.ServerRole;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.text.Text;
 import org.slf4j.Logger;
 
 import java.io.IOException;
@@ -40,7 +40,7 @@ public final class FabricPlatformAdapter implements PlatformAdapter {
     private final PlatformChatService chatService;
     private final PlatformCommandService commandService;
     private final PlatformServerService serverService;
-    private final PlatformTextService textService = message -> Text.literal(message.plainText());
+    private final PlatformTextService textService = message -> Component.literal(message.plainText());
     private final Path dataDirectory;
     private final RuntimeMode runtimeMode;
 
@@ -82,7 +82,7 @@ public final class FabricPlatformAdapter implements PlatformAdapter {
     @Override
     public PlatformInfo platformInfo() {
         ServerRole role = runtimeMode == RuntimeMode.VELOCITY_BACKEND ? ServerRole.BACKEND : ServerRole.STANDALONE;
-        return new PlatformInfo("fabric", "fabric", server.getVersion(), "standalone", "Fabric Server", role);
+        return new PlatformInfo("fabric", "fabric", server.getServerVersion(), "standalone", "Fabric Server", role);
     }
 
     @Override

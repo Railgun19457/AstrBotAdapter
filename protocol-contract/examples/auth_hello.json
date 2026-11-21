@@ -14,7 +14,6 @@
     "protocol": { "name": "astrbot-minecraft", "min_v": 1, "max_v": 1 },
     "key_id": "astrbot-main",
     "client_nonce": "client-nonce-32-bytes-example",
-    "auth_code": "A7K9Q2M4X8P1",
     "capabilities": ["core.v1", "auth.ed25519.v1", "chat.v1", "player.v1", "server.v1", "command.v1", "ai.v1", "log.v1"]
   }
 }

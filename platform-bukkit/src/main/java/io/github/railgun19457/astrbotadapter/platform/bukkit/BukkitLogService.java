@@ -7,6 +7,7 @@ import org.bukkit.plugin.Plugin;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
@@ -30,7 +31,12 @@ public final class BukkitLogService implements PlatformLogService {
     @Override
     public CompletionStage<LogQueryResult> query(LogQuery query) {
         return scheduler.callAsync(() -> {
-            Path root = plugin.getDataFolder().toPath().getParent().getParent();
+            Path dataDirectory = plugin.getDataFolder().toPath().toAbsolutePath();
+            Path pluginsDirectory = dataDirectory.getParent();
+            Path root = pluginsDirectory == null ? null : pluginsDirectory.getParent();
+            if (root == null) {
+                root = Paths.get(".").toAbsolutePath().normalize();
+            }
             Path latest = root.resolve("logs").resolve("latest.log");
             if (!Files.exists(latest)) {
                 return new LogQueryResult(false, List.of(new LogLine(System.currentTimeMillis(), "WARN", "latest.log not found")));

@@ -1,6 +1,10 @@
 package io.github.railgun19457.astrbotadapter.protocol;
 
 public final class Ops {
+    public static final String PAIR_INIT = "pair.init";
+    public static final String PAIR_CHALLENGE = "pair.challenge";
+    public static final String PAIR_PROVE = "pair.prove";
+    public static final String PAIR_COMPLETE = "pair.complete";
     public static final String AUTH_HELLO = "auth.hello";
     public static final String AUTH_CHALLENGE = "auth.challenge";
     public static final String AUTH_PROVE_CLIENT = "auth.prove_client";

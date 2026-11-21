@@ -5,9 +5,10 @@ import io.github.railgun19457.astrbotadapter.platform.spi.PlayerDetail;
 import io.github.railgun19457.astrbotadapter.platform.spi.PlayerPosition;
 import io.github.railgun19457.astrbotadapter.platform.spi.PlayerQuery;
 import io.github.railgun19457.astrbotadapter.platform.spi.PlayerSummary;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.server.players.PlayerList;
 
 import java.util.List;
 import java.util.Optional;
@@ -25,7 +26,7 @@ final class FabricPlayerService implements PlatformPlayerService {
 
     @Override
     public CompletionStage<List<PlayerSummary>> onlinePlayers(boolean includeDetails) {
-        return scheduler.callGlobal(() -> server.getPlayerManager().getPlayerList().stream().map(this::summary).toList());
+        return scheduler.callGlobal(() -> server.getPlayerList().getPlayers().stream().map(this::summary).toList());
     }
 
     @Override
@@ -33,7 +34,7 @@ final class FabricPlayerService implements PlatformPlayerService {
         return scheduler.callGlobal(() -> Optional.ofNullable(find(query)).map(this::detail));
     }
 
-    private ServerPlayerEntity find(PlayerQuery query) {
+    private ServerPlayer find(PlayerQuery query) {
         UUID uuid = null;
         if (query.type() == PlayerQuery.Type.UUID) {
             try {
@@ -42,59 +43,64 @@ final class FabricPlayerService implements PlatformPlayerService {
                 return null;
             }
         }
-        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-            if (uuid != null && player.getUuid().equals(uuid)) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (uuid != null && player.getUUID().equals(uuid)) {
                 return player;
             }
-            if (uuid == null && player.getGameProfile().getName().equalsIgnoreCase(query.value())) {
+            if (uuid == null && player.getGameProfile().name().equalsIgnoreCase(query.value())) {
                 return player;
             }
         }
         return null;
     }
 
-    private PlayerSummary summary(ServerPlayerEntity player) {
+    private PlayerSummary summary(ServerPlayer player) {
         return new PlayerSummary(
-            player.getUuid(),
-            player.getGameProfile().getName(),
+            player.getUUID(),
+            player.getGameProfile().name(),
             displayName(player),
             "standalone",
             worldName(player),
-            player.interactionManager.getGameMode().getName(),
+            player.gameMode.getGameModeForPlayer().getName(),
             -1
         );
     }
 
-    private PlayerDetail detail(ServerPlayerEntity player) {
+    private PlayerDetail detail(ServerPlayer player) {
         return new PlayerDetail(
-            player.getUuid(),
-            player.getGameProfile().getName(),
+            player.getUUID(),
+            player.getGameProfile().name(),
             displayName(player),
             true,
             "standalone",
             worldName(player),
-            player.interactionManager.getGameMode().getName(),
+            player.gameMode.getGameModeForPlayer().getName(),
             -1,
             (double) player.getHealth(),
             (double) player.getMaxHealth(),
-            player.getHungerManager().getFoodLevel(),
+            player.getFoodData().getFoodLevel(),
             player.experienceLevel,
             (double) player.experienceProgress,
-            server.getPlayerManager().isOperator(player.getGameProfile()),
-            player.getAbilities().allowFlying,
-            new PlayerPosition(worldName(player), player.getX(), player.getY(), player.getZ(), player.getYaw(), player.getPitch()),
+            isOperator(player),
+            player.getAbilities().mayfly,
+            new PlayerPosition(worldName(player), player.getX(), player.getY(), player.getZ(), player.getYRot(), player.getXRot()),
             null,
             null,
             null
         );
     }
 
-    private String displayName(ServerPlayerEntity player) {
-        Text displayName = player.getDisplayName();
-        return displayName == null ? player.getGameProfile().getName() : displayName.getString();
+    private boolean isOperator(ServerPlayer player) {
+        PlayerList playerList = server.getPlayerList();
+        return playerList.isOp(player.nameAndId());
     }
 
-    private String worldName(ServerPlayerEntity player) {
-        return player.getWorld().getRegistryKey().getValue().toString();
+    private String displayName(ServerPlayer player) {
+        Component displayName = player.getDisplayName();
+        return displayName == null ? player.getGameProfile().name() : displayName.getString();
+    }
+
+    private String worldName(ServerPlayer player) {
+        return player.level().dimension().identifier().toString();
     }
 }

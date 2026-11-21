@@ -3,9 +3,9 @@ package io.github.railgun19457.astrbotadapter.platform.fabric;
 import io.github.railgun19457.astrbotadapter.platform.spi.PlatformChatService;
 import io.github.railgun19457.astrbotadapter.platform.spi.PlayerSelector;
 import io.github.railgun19457.astrbotadapter.platform.spi.TextOutboundMessage;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
-import net.minecraft.server.network.ServerPlayerEntity;
-import net.minecraft.text.Text;
+import net.minecraft.server.level.ServerPlayer;
 
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
@@ -24,9 +24,9 @@ final class FabricChatService implements PlatformChatService {
     public CompletionStage<Void> broadcast(TextOutboundMessage message) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         scheduler.global(() -> {
-            Text text = Text.literal(message.plainText());
-            for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-                player.sendMessage(text);
+            Component text = Component.literal(message.plainText());
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                player.sendSystemMessage(text);
             }
             future.complete(null);
         });
@@ -37,24 +37,24 @@ final class FabricChatService implements PlatformChatService {
     public CompletionStage<Void> sendPrivate(PlayerSelector selector, TextOutboundMessage message) {
         CompletableFuture<Void> future = new CompletableFuture<>();
         scheduler.global(() -> {
-            ServerPlayerEntity player = findPlayer(selector);
+            ServerPlayer player = findPlayer(selector);
             if (player == null) {
                 future.completeExceptionally(new IllegalArgumentException("player not online"));
                 return;
             }
-            player.sendMessage(Text.literal(message.plainText()));
+            player.sendSystemMessage(Component.literal(message.plainText()));
             future.complete(null);
         });
         return future;
     }
 
-    private ServerPlayerEntity findPlayer(PlayerSelector selector) {
+    private ServerPlayer findPlayer(PlayerSelector selector) {
         UUID uuid = selector.uuid();
-        for (ServerPlayerEntity player : server.getPlayerManager().getPlayerList()) {
-            if (uuid != null && player.getUuid().equals(uuid)) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (uuid != null && player.getUUID().equals(uuid)) {
                 return player;
             }
-            if (uuid == null && selector.name() != null && player.getGameProfile().getName().equalsIgnoreCase(selector.name())) {
+            if (uuid == null && selector.name() != null && player.getGameProfile().name().equalsIgnoreCase(selector.name())) {
                 return player;
             }
         }

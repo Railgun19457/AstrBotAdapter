@@ -13,11 +13,11 @@ public interface PlatformRuntimeControl {
 
     Set<String> capabilities();
 
-    String createAuthCode(String targetId);
+    String createPairingCode(String targetId);
 
-    String listAuthCodes();
+    String listPairingCodes();
 
-    boolean revokeAuthCode(String code);
+    boolean revokePairingCode(String pairingId);
 
     String reloadConfig();
 

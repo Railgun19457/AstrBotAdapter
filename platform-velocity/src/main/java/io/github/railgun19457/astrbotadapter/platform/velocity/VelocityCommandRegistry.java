@@ -46,7 +46,7 @@ final class VelocityCommandRegistry implements PlatformCommandRegistry, SimpleCo
             source.sendMessage(Component.text("/astrbot connections"));
             source.sendMessage(Component.text("/astrbot auth create [target]"));
             source.sendMessage(Component.text("/astrbot auth list"));
-            source.sendMessage(Component.text("/astrbot auth revoke <code>"));
+            source.sendMessage(Component.text("/astrbot auth revoke <pairing_id>"));
             source.sendMessage(Component.text("/astrbot auth revoke key <domain> <key_id>"));
             source.sendMessage(Component.text("/astrbot auth key regen"));
             return;
@@ -88,13 +88,13 @@ final class VelocityCommandRegistry implements PlatformCommandRegistry, SimpleCo
         }
         if ("create".equalsIgnoreCase(args[1])) {
             String target = args.length >= 3 ? args[2] : null;
-            source.sendMessage(Component.text("Auth code: " + runtime.createAuthCode(target)));
+            source.sendMessage(Component.text("Pairing: " + runtime.createPairingCode(target)));
         } else if ("list".equalsIgnoreCase(args[1])) {
-            source.sendMessage(Component.text(runtime.listAuthCodes()));
+            source.sendMessage(Component.text(runtime.listPairingCodes()));
             source.sendMessage(Component.text(runtime.listTrustedKeys()));
         } else if ("revoke".equalsIgnoreCase(args[1])) {
             if (args.length < 3) {
-                source.sendMessage(Component.text("Usage: /astrbot auth revoke <code> OR /astrbot auth revoke key <domain> <key_id>"));
+                source.sendMessage(Component.text("Usage: /astrbot auth revoke <pairing_id> OR /astrbot auth revoke key <domain> <key_id>"));
                 return;
             }
             if ("key".equalsIgnoreCase(args[2])) {
@@ -105,7 +105,7 @@ final class VelocityCommandRegistry implements PlatformCommandRegistry, SimpleCo
                 source.sendMessage(Component.text(runtime.revokeTrustedKey(args[3], args[4]) ? "Trusted key revoked" : "Trusted key not found"));
                 return;
             }
-            source.sendMessage(Component.text(runtime.revokeAuthCode(args[2]) ? "Auth code revoked" : "Auth code not found"));
+            source.sendMessage(Component.text(runtime.revokePairingCode(args[2]) ? "Pairing revoked" : "Pairing ID not found"));
         } else if ("key".equalsIgnoreCase(args[1])) {
             if (args.length >= 3 && "regen".equalsIgnoreCase(args[2])) {
                 source.sendMessage(Component.text(runtime.regenerateLocalKey()));

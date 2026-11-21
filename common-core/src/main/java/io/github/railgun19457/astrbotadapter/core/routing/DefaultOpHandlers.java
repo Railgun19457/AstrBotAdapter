@@ -63,6 +63,24 @@ public final class DefaultOpHandlers {
         Frame<?> ok(RequestContext context, Frame<?> request, Object payload) {
             return context.frameFactory().responseTo(request, Status.success(), payload);
         }
+
+        CompletionStage<Frame<?>> completeChat(RequestContext context, Frame<JsonElement> request, CompletionStage<Void> stage) {
+            return stage.handle((ignored, throwable) -> {
+                if (throwable == null) {
+                    return ok(context, request, Map.of("delivered", true));
+                }
+                Throwable root = throwable;
+                while (root.getCause() != null && root.getCause() != root) {
+                    root = root.getCause();
+                }
+                String message = root.getMessage() == null ? "chat delivery failed" : root.getMessage();
+                if (message.toLowerCase().contains("not online") || message.toLowerCase().contains("player offline")) {
+                    return context.frameFactory().responseTo(request, Status.error(StatusCode.PLAYER_OFFLINE, "player not online"), Map.of());
+                }
+                context.platform().logger().warn("chat delivery failed: " + message);
+                return context.frameFactory().responseTo(request, Status.error(StatusCode.INTERNAL_ERROR, message), Map.of());
+            });
+        }
     }
 
     private static final class ServerStatusHandler extends BaseHandler {
@@ -146,7 +164,7 @@ public final class DefaultOpHandlers {
                 return CompletableFuture.completedFuture(unsupported(context, request, "chat service unavailable"));
             }
             ChatPayloads.ChatExternalPayload payload = payload(context, request, ChatPayloads.ChatExternalPayload.class);
-            return context.platform().chatService().get().broadcast(formatExternalMessage(context, payload)).thenApply(ignored -> ok(context, request, Map.of("delivered", true)));
+            return completeChat(context, request, context.platform().chatService().get().broadcast(formatExternalMessage(context, payload)));
         }
     }
 
@@ -163,7 +181,7 @@ public final class DefaultOpHandlers {
             }
             ChatPayloads.ChatPrivatePayload payload = payload(context, request, ChatPayloads.ChatPrivatePayload.class);
             PlayerSelector selector = new PlayerSelector(parseUuid(payload.player().uuid()), payload.player().name());
-            return context.platform().chatService().get().sendPrivate(selector, toText(payload.message())).thenApply(ignored -> ok(context, request, Map.of("delivered", true)));
+            return completeChat(context, request, context.platform().chatService().get().sendPrivate(selector, toText(payload.message())));
         }
     }
 
@@ -181,9 +199,9 @@ public final class DefaultOpHandlers {
             AiPayloads.AiReplyPayload payload = payload(context, request, AiPayloads.AiReplyPayload.class);
             if ("private".equalsIgnoreCase(payload.delivery().type())) {
                 PlayerSelector selector = new PlayerSelector(parseUuid(payload.delivery().playerUuid()), payload.delivery().playerName());
-                return context.platform().chatService().get().sendPrivate(selector, toText(payload.message())).thenApply(ignored -> ok(context, request, Map.of("delivered", true)));
+                return completeChat(context, request, context.platform().chatService().get().sendPrivate(selector, toText(payload.message())));
             }
-            return context.platform().chatService().get().broadcast(toText(payload.message())).thenApply(ignored -> ok(context, request, Map.of("delivered", true)));
+            return completeChat(context, request, context.platform().chatService().get().broadcast(toText(payload.message())));
         }
     }
 
@@ -428,7 +446,14 @@ public final class DefaultOpHandlers {
             .replace("{platform}", platform)
             .replace("{sender}", sender)
             .replace("{message}", message);
-        return new TextOutboundMessage(formatted, formatted, "plain", Map.of("dedupe_key", payload.dedupeKey()));
+        java.util.HashMap<String, Object> attributes = new java.util.HashMap<>();
+        attributes.put("dedupe_key", payload.dedupeKey());
+        if (payload.bridge() != null) {
+            attributes.put("suppress_echo", payload.bridge().suppressEcho());
+            attributes.put("origin_platform", payload.bridge().originPlatform());
+            attributes.put("origin_conversation_id", payload.bridge().originConversationId());
+        }
+        return new TextOutboundMessage(formatted, formatted, "plain", Map.copyOf(attributes));
     }
 
     private static String firstNonBlank(String... values) {

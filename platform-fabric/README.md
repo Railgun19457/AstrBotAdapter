@@ -1,6 +1,6 @@
 # platform-fabric
 
-Fabric support targets Dedicated Server on Minecraft 1.20.1.
+Fabric support targets Dedicated Server on Minecraft 26.1.2.
 
 Implemented scope:
 

@@ -12,6 +12,7 @@ public final class DefaultCapabilityService implements CapabilityService {
         LinkedHashSet<String> capabilities = new LinkedHashSet<>();
         capabilities.add(CapabilityNames.CORE_V1);
         capabilities.add(CapabilityNames.AUTH_ED25519_V1);
+        capabilities.add(CapabilityNames.AUTH_SRP6A_PAIRING_V1);
 
         if (config.chat() && platform.chatService().isPresent()) {
             capabilities.add(CapabilityNames.CHAT_V1);

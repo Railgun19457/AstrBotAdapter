@@ -40,7 +40,8 @@ val releaseArtifacts = listOf(
 )
 
 tasks.register("checksums") {
-    dependsOn(":platform-bukkit:jar", ":platform-folia:jar", ":platform-velocity:jar", ":platform-fabric:remapJar")
+    // Minecraft 26.x Fabric builds are unobfuscated, so the final artifact is produced by jar.
+    dependsOn(":platform-bukkit:jar", ":platform-folia:jar", ":platform-velocity:jar", ":platform-fabric:jar")
     val outputFile = layout.buildDirectory.file("distributions/SHA256SUMS.txt")
     outputs.file(outputFile)
     doLast {

@@ -29,7 +29,7 @@ public record AdapterConfig(
             new WebSocketConfig(true, "127.0.0.1", 25585, "/astrbot", ""),
             new WebSocketConfig(true, "127.0.0.1", 25585, "/astrbot", ""),
             new WebSocketConfig(true, "0.0.0.0", 25586, "/cluster", ""),
-            new VelocityBackendConfig(serverId, "ws://127.0.0.1:25586/cluster", ""),
+            new VelocityBackendConfig(serverId, "ws://127.0.0.1:25586/cluster"),
             new AuthConfig("server-main", true, "keys", 300000L),
             FeatureConfig.defaults(),
             new ChatConfig(true, "", "[MC] {player}: {message}", "[QQ] {sender}: {message}", true, true),

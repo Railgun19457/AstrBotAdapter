@@ -6,6 +6,7 @@ import io.github.railgun19457.astrbotadapter.core.auth.CryptoUtil;
 import io.github.railgun19457.astrbotadapter.core.auth.KeyStoreService;
 import io.github.railgun19457.astrbotadapter.core.auth.LocalKeyPair;
 import io.github.railgun19457.astrbotadapter.core.auth.PairingCodeService;
+import io.github.railgun19457.astrbotadapter.core.auth.Srp6aService;
 import io.github.railgun19457.astrbotadapter.core.auth.TrustedPublicKey;
 import io.github.railgun19457.astrbotadapter.core.cluster.BackendRegistry;
 import io.github.railgun19457.astrbotadapter.core.config.AdapterConfig;
@@ -46,6 +47,7 @@ import io.github.railgun19457.astrbotadapter.transport.WebSocketServerEndpoint;
 import io.github.railgun19457.astrbotadapter.util.Ids;
 import io.github.railgun19457.astrbotadapter.util.SystemClock;
 
+import java.net.InetAddress;
 import java.net.URI;
 import java.security.GeneralSecurityException;
 import java.security.PublicKey;
@@ -72,6 +74,7 @@ public final class CoreRuntime implements PlatformRuntimeControl {
     private final ConcurrentHashMap<String, Frame<JsonElement>> forwardedRequests = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, PendingAuth> pendingAuths = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, ClientAuthState> pendingClientAuths = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, PendingPairing> pendingPairings = new ConcurrentHashMap<>();
     private KeyStoreService keyStoreService;
     private AdapterConfig config;
     private LocalKeyPair localKeyPair;
@@ -114,6 +117,9 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         }
         astrbotEndpoints.clear();
         backendEndpoints.clear();
+        pendingAuths.clear();
+        pendingClientAuths.clear();
+        pendingPairings.clear();
         platform.eventSource().unregisterAll();
         platform.commandRegistry().unregisterAll();
         running = false;
@@ -155,24 +161,24 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         return pairingCodeService;
     }
 
-    public PairingCodeService.PairingCode createPairingCode(String targetId) {
+    public PairingCodeService.PairingCode createPairingRegistration(String targetId) {
         long ttl = config == null ? 300000L : config.auth().authCodeTtlMillis();
         return pairingCodeService.create(targetId, Duration.ofMillis(ttl));
     }
 
     @Override
-    public String createAuthCode(String targetId) {
-        PairingCodeService.PairingCode code = createPairingCode(targetId);
-        return code.code() + " (expires_at=" + code.expiresAt() + ")";
+    public String createPairingCode(String targetId) {
+        PairingCodeService.PairingCode code = createPairingRegistration(targetId);
+        return "pairing_id=" + code.pairingId() + " code=" + code.code() + " (expires_at=" + code.expiresAt() + ")";
     }
 
     @Override
-    public String listAuthCodes() {
+    public String listPairingCodes() {
         if (pairingCodeService.list().isEmpty()) {
             return "No pending auth codes";
         }
         StringBuilder builder = new StringBuilder();
-        pairingCodeService.list().values().forEach(code -> builder.append(code.code())
+        pairingCodeService.list().values().forEach(code -> builder.append(code.pairingId())
             .append(" target=").append(code.targetId())
             .append(" expires_at=").append(code.expiresAt())
             .append(" used=").append(code.used())
@@ -181,8 +187,8 @@ public final class CoreRuntime implements PlatformRuntimeControl {
     }
 
     @Override
-    public boolean revokeAuthCode(String code) {
-        return pairingCodeService.revoke(code);
+    public boolean revokePairingCode(String pairingId) {
+        return pairingCodeService.revoke(pairingId);
     }
 
     @Override
@@ -201,6 +207,9 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         config = new ConfigService(platform).loadOrCreate();
         keyStoreService = new KeyStoreService(platform);
         localKeyPair = keyStoreService.loadOrCreateLocalKey(config.auth().keyId());
+        pendingAuths.clear();
+        pendingClientAuths.clear();
+        pendingPairings.clear();
         capabilities = capabilityService.capabilities(platform, config.features());
         registerPlatformEvents();
         startTransports();
@@ -246,7 +255,8 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         return "Local key regenerated. fingerprint=" + localKeyPair.fingerprintSha256();
     }
 
-    public CompletionStage<Frame<?>> handleFrame(Frame<JsonElement> frame) {
+    public CompletionStage<Frame<?>> handleFrame(String connectionId, Frame<JsonElement> frame) {
+        cleanupExpiredAuthState();
         if (!isFrameAddressedToLocalNode(frame)) {
             return CompletableFuture.completedFuture(frameFactory.errorTo(frame, StatusCode.UNAUTHORIZED, "route destination does not match local node"));
         }
@@ -292,14 +302,20 @@ public final class CoreRuntime implements PlatformRuntimeControl {
                 new CorePayloads.HeartbeatPayload(requestPayload == null ? null : requestPayload.sessionId(), System.currentTimeMillis())
             ));
         }
+        if (frame.type() == FrameType.HELLO && Ops.PAIR_INIT.equals(frame.op())) {
+            return CompletableFuture.completedFuture(pairChallenge(connectionId, frame));
+        }
+        if (frame.type() == FrameType.AUTH && Ops.PAIR_PROVE.equals(frame.op())) {
+            return CompletableFuture.completedFuture(pairComplete(connectionId, frame));
+        }
         if (frame.type() == FrameType.HELLO) {
-            return CompletableFuture.completedFuture(authChallenge(frame));
+            return CompletableFuture.completedFuture(authChallenge(connectionId, frame));
         }
         if (frame.type() == FrameType.CHALLENGE) {
             return CompletableFuture.completedFuture(authProve(frame));
         }
         if (frame.type() == FrameType.AUTH) {
-            return CompletableFuture.completedFuture(authResult(frame));
+            return CompletableFuture.completedFuture(authResult(connectionId, frame));
         }
         if (frame.type() == FrameType.AUTH_RESULT) {
             if (!handleAuthResult(frame)) {
@@ -311,6 +327,9 @@ public final class CoreRuntime implements PlatformRuntimeControl {
     }
 
     private void startTransports() {
+        if (!config.auth().enabled() && !isLoopbackOnlyTransport()) {
+            throw new IllegalStateException("auth.enabled=false is only allowed when all configured websocket hosts are loopback");
+        }
         TransportLogger transportLogger = new PlatformTransportLogger();
         switch (platform.runtimeMode()) {
             case STANDALONE -> startServer(config.standaloneWebSocket(), transportLogger, EndpointRole.ASTRBOT);
@@ -349,7 +368,12 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         if (config.chat().forwardEnabled()) {
             if (config.chat().forwardPrefix().isBlank() || message.startsWith(config.chat().forwardPrefix())) {
                 String content = config.chat().forwardPrefix().isBlank() ? message : message.substring(config.chat().forwardPrefix().length());
-                publishEvent(Ops.CHAT_PLAYER, new ChatPayloads.ChatPlayerPayload(player, CommonPayloads.TextMessage.plain(content, System.currentTimeMillis()), event.world(), "player_chat"));
+                String formatted = config.chat().minecraftToExternalFormat()
+                    .replace("{player}", event.playerName())
+                    .replace("{message}", content)
+                    .replace("{world}", event.world() == null ? "" : event.world())
+                    .replace("{server}", serverId());
+                publishEvent(Ops.CHAT_PLAYER, new ChatPayloads.ChatPlayerPayload(player, CommonPayloads.TextMessage.plain(formatted, System.currentTimeMillis()), event.world(), "player_chat"));
             }
         }
     }
@@ -434,7 +458,7 @@ public final class CoreRuntime implements PlatformRuntimeControl {
             websocket.path(),
             codec,
             new io.github.railgun19457.astrbotadapter.protocol.FrameValidator(),
-            this::handleFrame,
+            frameResponder(),
             transportLogger,
             config.rateLimit().maxFrameBytes(),
             config.rateLimit().maxPendingRequests()
@@ -455,7 +479,7 @@ public final class CoreRuntime implements PlatformRuntimeControl {
                 URI.create(url),
                 codec,
                 new io.github.railgun19457.astrbotadapter.protocol.FrameValidator(),
-                this::handleFrame,
+                frameResponder(),
                 transportLogger,
                 config.rateLimit().maxFrameBytes(),
                 config.rateLimit().maxPendingRequests(),
@@ -471,6 +495,20 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         } catch (IllegalArgumentException exception) {
             platform.logger().error("Invalid backend websocket url", exception);
         }
+    }
+
+    private io.github.railgun19457.astrbotadapter.transport.FrameResponder frameResponder() {
+        return new io.github.railgun19457.astrbotadapter.transport.FrameResponder() {
+            @Override
+            public CompletionStage<Frame<?>> onFrame(String connectionId, Frame<JsonElement> frame) {
+                return handleFrame(connectionId, frame);
+            }
+
+            @Override
+            public void onConnectionClosed(String connectionId) {
+                CoreRuntime.this.onConnectionClosed(connectionId);
+            }
+        };
     }
 
     private void addEndpoint(EndpointRole role, TransportEndpoint endpoint) {
@@ -580,7 +618,7 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         BACKEND
     }
 
-    private Frame<Object> authChallenge(Frame<JsonElement> hello) {
+    private Frame<Object> authChallenge(String connectionId, Frame<JsonElement> hello) {
         AuthPayloads.AuthHelloPayload payload = codec.decodePayload(hello.payload(), AuthPayloads.AuthHelloPayload.class);
         String challengeId = Ids.randomId();
         String challengeFrameId = Ids.randomId();
@@ -595,7 +633,7 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         if (protocol.minV() > protocol.maxV() || protocol.minV() > ProtocolConstants.VERSION || protocol.maxV() < ProtocolConstants.VERSION) {
             return frameFactory.errorTo(hello, StatusCode.PROTOCOL_VERSION_UNSUPPORTED, "no compatible protocol version");
         }
-        pendingAuths.put(hello.route().traceId(), new PendingAuth(
+        pendingAuths.put(pendingKey(connectionId, hello.route().traceId()), new PendingAuth(
             hello.route().src().role(),
             hello.route().src().id(),
             localNode().role(),
@@ -604,7 +642,6 @@ public final class CoreRuntime implements PlatformRuntimeControl {
             protocol.maxV(),
             ProtocolConstants.VERSION,
             payload.keyId(),
-            payload.authCode(),
             payload.clientNonce(),
             List.copyOf(payload.capabilities() == null ? List.of() : payload.capabilities()),
             localKeyPair.keyId(),
@@ -632,6 +669,213 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         );
     }
 
+    private Frame<Object> pairChallenge(String connectionId, Frame<JsonElement> init) {
+        cleanupExpiredPairings();
+        AuthPayloads.PairInitPayload payload = codec.decodePayload(init.payload(), AuthPayloads.PairInitPayload.class);
+        if (!config.auth().enabled()) {
+            return frameFactory.errorTo(init, StatusCode.PAIRING_FAILED, "authentication is disabled");
+        }
+        if (payload == null || payload.protocol() == null || payload.keyId() == null || payload.keyId().isBlank()
+            || payload.publicKey() == null || payload.publicKey().isBlank() || payload.pairingId() == null || payload.pairingId().isBlank()) {
+            return frameFactory.errorTo(init, StatusCode.BAD_REQUEST, "pairing key_id, public_key and pairing_id are required");
+        }
+        if (!isValidKeyId(payload.keyId())) {
+            return frameFactory.errorTo(init, StatusCode.BAD_REQUEST, "invalid pairing key_id");
+        }
+        if (init.route() == null || init.route().src() == null || init.route().dst() == null) {
+            return frameFactory.errorTo(init, StatusCode.BAD_REQUEST, "pairing route is required");
+        }
+        AuthPayloads.ProtocolRange protocol = payload.protocol();
+        if (!ProtocolConstants.PROTOCOL_NAME.equals(protocol.name()) || protocol.minV() > protocol.maxV()
+            || protocol.minV() > ProtocolConstants.VERSION || protocol.maxV() < ProtocolConstants.VERSION) {
+            return frameFactory.errorTo(init, StatusCode.PROTOCOL_VERSION_UNSUPPORTED, "no compatible protocol version");
+        }
+        if (!capabilities.contains(CapabilityNames.AUTH_SRP6A_PAIRING_V1)
+            || payload.capabilities() == null
+            || !payload.capabilities().contains(CapabilityNames.AUTH_SRP6A_PAIRING_V1)) {
+            return frameFactory.errorTo(init, StatusCode.PROTOCOL_VERSION_UNSUPPORTED, "SRP pairing capability is required");
+        }
+        try {
+            CryptoUtil.publicKeyFromText(payload.publicKey());
+        } catch (GeneralSecurityException exception) {
+            return frameFactory.errorTo(init, StatusCode.BAD_REQUEST, "invalid client public key");
+        }
+        PairingCodeService.LookupResult lookup = pairingCodeService.lookup(payload.pairingId(), init.route().src().id());
+        if (lookup.status() != PairingCodeService.VerificationStatus.OK || lookup.record() == null) {
+            return frameFactory.errorTo(init, pairingStatusCode(lookup.status()), pairingStatusMessage(lookup.status()));
+        }
+        PairingCodeService.PairingRecord record = lookup.record();
+        try {
+            Srp6aService.ServerSession session = Srp6aService.startServer(record.registration());
+            pendingPairings.put(pendingKey(connectionId, init.route().traceId()), new PendingPairing(
+                init.route().src().role(),
+                init.route().src().id(),
+                init.route().dst().role(),
+                init.route().dst().id(),
+                payload.keyId(),
+                payload.publicKey(),
+                record.pairingId(),
+                Srp6aService.pairingIdentity(record.pairingId()),
+                session,
+                System.currentTimeMillis() + 30000L,
+                protocol.minV(),
+                protocol.maxV(),
+                List.copyOf(payload.capabilities() == null ? List.of() : payload.capabilities())
+            ));
+            return new Frame<>(
+                ProtocolConstants.VERSION,
+                Ids.randomId(),
+                FrameType.CHALLENGE,
+                Ops.PAIR_CHALLENGE,
+                System.currentTimeMillis(),
+                1,
+                new Route(init.route().dst(), init.route().src(), init.route().traceId()),
+                null,
+                null,
+                null,
+                null,
+                new AuthPayloads.PairChallengePayload(
+                    record.pairingId(),
+                    Srp6aService.SUITE,
+                    record.salt(),
+                    session.serverPublicValue(),
+                    localKeyPair.keyId(),
+                    localKeyPair.publicKeyOpenSsh(),
+                    record.expiresAt(),
+                    ProtocolConstants.VERSION,
+                    List.copyOf(capabilities)
+                )
+            );
+        } catch (RuntimeException exception) {
+            platform.logger().warn("Failed to initialize SRP pairing: " + exception.getMessage());
+            pairingCodeService.recordFailedAttempt(payload.pairingId());
+            return frameFactory.errorTo(init, StatusCode.PAIRING_FAILED, "failed to initialize pairing");
+        }
+    }
+
+    private Frame<Object> pairComplete(String connectionId, Frame<JsonElement> prove) {
+        cleanupExpiredPairings();
+        if (prove.route() == null || prove.route().src() == null || prove.route().dst() == null) {
+            return frameFactory.errorTo(prove, StatusCode.BAD_REQUEST, "pairing route is required");
+        }
+        AuthPayloads.PairProofPayload payload = codec.decodePayload(prove.payload(), AuthPayloads.PairProofPayload.class);
+        PendingPairing pending = pendingPairings.remove(pendingKey(connectionId, prove.route().traceId()));
+        if (pending == null || pending.expiresAt() < System.currentTimeMillis()) {
+            return frameFactory.errorTo(prove, StatusCode.PAIRING_FAILED, "pairing challenge expired");
+        }
+        if (payload == null || payload.keyId() == null || !payload.keyId().equals(pending.clientKeyId())
+            || payload.publicKey() == null || !payload.publicKey().equals(pending.clientPublicKey())
+            || payload.clientPublicValue() == null || payload.clientPublicValue().isBlank()
+            || payload.clientProof() == null || payload.clientProof().isBlank()
+            || !pending.clientRole().equals(prove.route().src().role())
+            || !pending.clientId().equals(prove.route().src().id())
+            || !pending.serverRole().equals(prove.route().dst().role())
+            || !pending.serverId().equals(prove.route().dst().id())) {
+            pairingCodeService.recordFailedAttempt(pending.pairingId());
+            return frameFactory.errorTo(prove, StatusCode.PAIRING_FAILED, "pairing proof does not match challenge");
+        }
+        try {
+            Srp6aService.ServerProofResult proofResult = Srp6aService.verifyClientProof(
+                pending.srpSession(),
+                payload.clientPublicValue(),
+                pending.srpIdentity(),
+                payload.clientProof()
+            );
+            if (proofResult == null) {
+                pairingCodeService.recordFailedAttempt(pending.pairingId());
+                return frameFactory.errorTo(prove, StatusCode.PAIRING_FAILED, "SRP proof verification failed");
+            }
+            String serverProof = proofResult.serverProof();
+            String keyBinding = Srp6aService.keyBindingConfirmation(
+                proofResult.sessionKey(),
+                pending.pairingId(),
+                pending.clientRole().wireName(),
+                pending.clientId(),
+                pending.serverRole().wireName(),
+                pending.serverId(),
+                pending.clientKeyId(),
+                pending.clientPublicKey(),
+                localKeyPair.keyId(),
+                localKeyPair.publicKeyOpenSsh(),
+                CryptoUtil.base64Url(pending.srpSession().salt()),
+                payload.clientPublicValue(),
+                pending.srpSession().serverPublicValue(),
+                payload.clientProof(),
+                serverProof
+            );
+            String domain = trustDomain(pending.clientRole());
+            keyStoreService.trust(domain, pending.clientKeyId(), pending.clientPublicKey());
+            PairingCodeService.LookupResult consumed = pairingCodeService.consume(pending.pairingId(), pending.clientId());
+            if (consumed.status() != PairingCodeService.VerificationStatus.OK) {
+                keyStoreService.removeTrustedKey(domain, pending.clientKeyId());
+                return frameFactory.errorTo(prove, pairingStatusCode(consumed.status()), pairingStatusMessage(consumed.status()));
+            }
+            platform.logger().info("Trusted new " + pending.clientRole().wireName() + " key " + pending.clientKeyId()
+                + " fingerprint=" + CryptoUtil.fingerprintSha256(CryptoUtil.publicKeyFromText(pending.clientPublicKey())));
+            Status status = Status.success();
+            return new Frame<>(
+                ProtocolConstants.VERSION,
+                Ids.randomId(),
+                FrameType.AUTH_RESULT,
+                Ops.PAIR_COMPLETE,
+                System.currentTimeMillis(),
+                2,
+                new Route(prove.route().dst(), prove.route().src(), prove.route().traceId()),
+                null,
+                null,
+                null,
+                status,
+                new AuthPayloads.PairCompletePayload(
+                    true,
+                    localKeyPair.keyId(),
+                    localKeyPair.publicKeyOpenSsh(),
+                    serverProof,
+                    keyBinding,
+                    Ids.randomId(),
+                    System.currentTimeMillis(),
+                    List.copyOf(capabilities),
+                    status,
+                    "srp_paired_key"
+                )
+            );
+        } catch (GeneralSecurityException | IllegalArgumentException exception) {
+            pairingCodeService.recordFailedAttempt(pending.pairingId());
+            return frameFactory.errorTo(prove, StatusCode.PAIRING_FAILED, "invalid pairing proof");
+        } catch (org.bouncycastle.crypto.CryptoException exception) {
+            pairingCodeService.recordFailedAttempt(pending.pairingId());
+            return frameFactory.errorTo(prove, StatusCode.PAIRING_FAILED, "SRP proof verification failed");
+        }
+    }
+
+    private StatusCode pairingStatusCode(PairingCodeService.VerificationStatus status) {
+        return switch (status) {
+            case EXPIRED -> StatusCode.AUTH_CODE_EXPIRED;
+            case USED -> StatusCode.AUTH_CODE_USED;
+            case ATTEMPTS_EXCEEDED -> StatusCode.AUTH_CODE_ATTEMPTS_EXCEEDED;
+            case MISSING, TARGET_MISMATCH -> StatusCode.AUTH_CODE_INVALID;
+            case OK -> StatusCode.OK;
+        };
+    }
+
+    private String pairingStatusMessage(PairingCodeService.VerificationStatus status) {
+        return switch (status) {
+            case EXPIRED -> "pairing code expired";
+            case USED -> "pairing code already used";
+            case ATTEMPTS_EXCEEDED -> "pairing code attempt limit exceeded";
+            case MISSING, TARGET_MISMATCH -> "pairing code invalid";
+            case OK -> "ok";
+        };
+    }
+
+    private void cleanupExpiredPairings() {
+        long now = System.currentTimeMillis();
+        pendingPairings.entrySet().removeIf(entry -> entry.getValue().expiresAt() < now);
+    }
+
+    private boolean isValidKeyId(String keyId) {
+        return keyId != null && keyId.matches("[A-Za-z0-9._-]{1,128}");
+    }
+
     private Frame<Object> authHello() {
         NodeRef src = localNode();
         NodeRef dst = remoteEventNode();
@@ -640,7 +884,7 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         String clientNonce = Ids.randomId();
         long now = System.currentTimeMillis();
         List<String> localCapabilities = List.copyOf(capabilities);
-        pendingClientAuths.put(traceId, new ClientAuthState(
+        pendingClientAuths.put(pendingKey("client", traceId), new ClientAuthState(
             src.role(),
             src.id(),
             dst.role(),
@@ -650,7 +894,6 @@ public final class CoreRuntime implements PlatformRuntimeControl {
             localKeyPair.keyId(),
             clientNonce,
             localCapabilities,
-            config.velocityBackend().authCode(),
             helloId,
             now,
             null,
@@ -676,13 +919,13 @@ public final class CoreRuntime implements PlatformRuntimeControl {
             null,
             null,
             null,
-            new AuthPayloads.AuthHelloPayload(new AuthPayloads.ProtocolRange(ProtocolConstants.PROTOCOL_NAME, ProtocolConstants.VERSION, ProtocolConstants.VERSION), localKeyPair.keyId(), clientNonce, config.velocityBackend().authCode(), localCapabilities)
+            new AuthPayloads.AuthHelloPayload(new AuthPayloads.ProtocolRange(ProtocolConstants.PROTOCOL_NAME, ProtocolConstants.VERSION, ProtocolConstants.VERSION), localKeyPair.keyId(), clientNonce, localCapabilities)
         );
     }
 
     private Frame<Object> authProve(Frame<JsonElement> challenge) {
         AuthPayloads.AuthChallengePayload payload = codec.decodePayload(challenge.payload(), AuthPayloads.AuthChallengePayload.class);
-        ClientAuthState state = pendingClientAuths.get(challenge.route().traceId());
+        ClientAuthState state = pendingClientAuths.get(pendingKey("client", challenge.route().traceId()));
         if (state == null) {
             state = new ClientAuthState(
                 challenge.route().dst().role(),
@@ -694,7 +937,6 @@ public final class CoreRuntime implements PlatformRuntimeControl {
                 localKeyPair.keyId(),
                 "",
                 List.copyOf(capabilities),
-                null,
                 "",
                 0L,
                 null,
@@ -747,7 +989,7 @@ public final class CoreRuntime implements PlatformRuntimeControl {
             signatureBytes = new byte[0];
             signature = "";
         }
-        pendingClientAuths.put(challenge.route().traceId(), state.withChallenge(
+        pendingClientAuths.put(pendingKey("client", challenge.route().traceId()), state.withChallenge(
             challenge.route().src().role(),
             challenge.route().src().id(),
             payload.serverKeyId(),
@@ -777,9 +1019,9 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         );
     }
 
-    private Frame<Object> authResult(Frame<JsonElement> auth) {
+    private Frame<Object> authResult(String connectionId, Frame<JsonElement> auth) {
         AuthPayloads.AuthPayload payload = codec.decodePayload(auth.payload(), AuthPayloads.AuthPayload.class);
-        PendingAuth pending = pendingAuths.remove(auth.route().traceId());
+        PendingAuth pending = pendingAuths.remove(pendingKey(connectionId, auth.route().traceId()));
         AuthDecision decision = authenticate(auth, payload, pending);
         Status status = decision.ok() ? Status.success() : Status.error(decision.code(), decision.message());
         String serverSignature = "";
@@ -834,6 +1076,9 @@ public final class CoreRuntime implements PlatformRuntimeControl {
 
     private AuthDecision authenticate(Frame<?> auth, AuthPayloads.AuthPayload payload, PendingAuth pending) {
         if (!config.auth().enabled()) {
+            if (!isLoopbackOnlyTransport()) {
+                return AuthDecision.fail(StatusCode.AUTH_FAILED, "auth.enabled=false is only allowed on loopback transports");
+            }
             return AuthDecision.success("", "");
         }
         if (pending == null) {
@@ -864,12 +1109,7 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         }
 
         if (trusted.isEmpty()) {
-            if (pending.authCode() == null || pending.authCode().isBlank()) {
-                return AuthDecision.fail(StatusCode.AUTH_CODE_INVALID, "auth_code required for first pairing");
-            }
-            if (publicKey == null) {
-                return AuthDecision.fail(StatusCode.AUTH_FAILED, "public key required for first pairing");
-            }
+            return AuthDecision.fail(StatusCode.AUTH_CODE_INVALID, "SRP pairing is required for first enrollment");
         }
 
         if (payload.signature() == null || payload.signature().isBlank()) {
@@ -907,19 +1147,6 @@ public final class CoreRuntime implements PlatformRuntimeControl {
             if (!verified) {
                 return AuthDecision.fail(StatusCode.AUTH_FAILED, "signature verification failed");
             }
-            if (trusted.isEmpty()) {
-                PairingCodeService.VerificationResult result = pairingCodeService.verifyAndUseDetailed(pending.authCode(), pending.clientId());
-                if (result.status() != PairingCodeService.VerificationStatus.OK) {
-                    return switch (result.status()) {
-                        case EXPIRED -> AuthDecision.fail(StatusCode.AUTH_CODE_EXPIRED, "auth_code expired");
-                        case USED -> AuthDecision.fail(StatusCode.AUTH_CODE_USED, "auth_code already used");
-                        case MISSING, TARGET_MISMATCH -> AuthDecision.fail(StatusCode.AUTH_CODE_INVALID, "auth_code invalid");
-                        case OK -> AuthDecision.success(clientPublicKeySha256, CryptoUtil.signatureSha256(signature));
-                    };
-                }
-                keyStoreService.trust(domain, payload.keyId(), payload.publicKey());
-                platform.logger().info("Trusted new " + pending.clientRole().wireName() + " key " + payload.keyId() + " fingerprint=" + clientPublicKeySha256);
-            }
             return AuthDecision.success(clientPublicKeySha256, CryptoUtil.signatureSha256(signature));
         } catch (GeneralSecurityException | IllegalArgumentException exception) {
             return AuthDecision.fail(StatusCode.AUTH_FAILED, "signature verification failed");
@@ -927,7 +1154,7 @@ public final class CoreRuntime implements PlatformRuntimeControl {
     }
 
     private boolean handleAuthResult(Frame<JsonElement> authResult) {
-        ClientAuthState state = pendingClientAuths.remove(authResult.route().traceId());
+        ClientAuthState state = pendingClientAuths.remove(pendingKey("client", authResult.route().traceId()));
         AuthPayloads.AuthResultPayload payload = codec.decodePayload(authResult.payload(), AuthPayloads.AuthResultPayload.class);
         if (payload == null || !payload.ok()) {
             Status status = payload == null ? null : payload.status();
@@ -1014,6 +1241,71 @@ public final class CoreRuntime implements PlatformRuntimeControl {
             .findFirst();
     }
 
+    private String pendingKey(String connectionId, String traceId) {
+        String conn = connectionId == null || connectionId.isBlank() ? "unknown" : connectionId;
+        String trace = traceId == null ? "" : traceId;
+        return conn + "\n" + trace;
+    }
+
+    public void onConnectionClosed(String connectionId) {
+        if (connectionId == null || connectionId.isBlank()) {
+            return;
+        }
+        String prefix = connectionId + "\n";
+        pendingAuths.keySet().removeIf(key -> key.startsWith(prefix));
+        pendingPairings.keySet().removeIf(key -> key.startsWith(prefix));
+        if ("client".equals(connectionId)) {
+            pendingClientAuths.clear();
+        }
+    }
+
+    private void cleanupExpiredAuthState() {
+        long now = System.currentTimeMillis();
+        pendingAuths.entrySet().removeIf(entry -> entry.getValue().challengeExpiresAt() < now);
+        pendingPairings.entrySet().removeIf(entry -> entry.getValue().expiresAt() < now);
+        pendingClientAuths.entrySet().removeIf(entry -> {
+            long expires = entry.getValue().challengeExpiresAt();
+            return expires > 0L && expires < now;
+        });
+    }
+
+    private boolean isLoopbackOnlyTransport() {
+        if (config == null) {
+            return false;
+        }
+        return switch (platform.runtimeMode()) {
+            case STANDALONE -> isLoopbackHost(config.standaloneWebSocket().host());
+            case VELOCITY -> isLoopbackHost(config.astrbotWebSocket().host()) && isLoopbackHost(config.clusterWebSocket().host());
+            case VELOCITY_BACKEND -> isLoopbackUri(config.velocityBackend().velocityUrl());
+        };
+    }
+
+    private boolean isLoopbackHost(String host) {
+        if (host == null || host.isBlank()) {
+            return false;
+        }
+        String normalized = host.trim().toLowerCase();
+        if ("localhost".equals(normalized) || "127.0.0.1".equals(normalized) || "::1".equals(normalized) || "[::1]".equals(normalized)) {
+            return true;
+        }
+        try {
+            return InetAddress.getByName(host).isLoopbackAddress();
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
+    private boolean isLoopbackUri(String url) {
+        if (url == null || url.isBlank()) {
+            return false;
+        }
+        try {
+            return isLoopbackHost(URI.create(url).getHost());
+        } catch (Exception exception) {
+            return false;
+        }
+    }
+
     private String trustDomain(Role role) {
         return switch (role) {
             case ASTRBOT -> "astrbot";
@@ -1032,7 +1324,6 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         int clientMaxV,
         int selectedV,
         String clientKeyId,
-        String authCode,
         String clientNonce,
         List<String> clientCapabilities,
         String serverKeyId,
@@ -1046,6 +1337,23 @@ public final class CoreRuntime implements PlatformRuntimeControl {
     ) {
     }
 
+    private record PendingPairing(
+        Role clientRole,
+        String clientId,
+        Role serverRole,
+        String serverId,
+        String clientKeyId,
+        String clientPublicKey,
+        String pairingId,
+        String srpIdentity,
+        Srp6aService.ServerSession srpSession,
+        long expiresAt,
+        int clientMinV,
+        int clientMaxV,
+        List<String> clientCapabilities
+    ) {
+    }
+
     private record ClientAuthState(
         Role clientRole,
         String clientId,
@@ -1056,7 +1364,6 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         String clientKeyId,
         String clientNonce,
         List<String> clientCapabilities,
-        String authCode,
         String helloId,
         long helloTs,
         String serverKeyId,
@@ -1071,7 +1378,7 @@ public final class CoreRuntime implements PlatformRuntimeControl {
         String clientSignatureSha256
     ) {
         ClientAuthState withChallenge(Role serverRole, String serverId, String serverKeyId, String serverNonce, String challengeId, long challengeExpiresAt, String challengeFrameId, int selectedV, List<String> serverCapabilities, String authFrameId, long authTs, String clientSignatureSha256) {
-            return new ClientAuthState(clientRole, clientId, serverRole, serverId, clientMinV, clientMaxV, clientKeyId, clientNonce, clientCapabilities, authCode, helloId, helloTs, serverKeyId, serverNonce, challengeId, challengeExpiresAt, challengeFrameId, selectedV, serverCapabilities, authFrameId, authTs, clientSignatureSha256);
+            return new ClientAuthState(clientRole, clientId, serverRole, serverId, clientMinV, clientMaxV, clientKeyId, clientNonce, clientCapabilities, helloId, helloTs, serverKeyId, serverNonce, challengeId, challengeExpiresAt, challengeFrameId, selectedV, serverCapabilities, authFrameId, authTs, clientSignatureSha256);
         }
     }
 

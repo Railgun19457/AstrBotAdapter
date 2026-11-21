@@ -7,6 +7,7 @@ import io.github.railgun19457.astrbotadapter.protocol.FrameType;
 import io.github.railgun19457.astrbotadapter.protocol.FrameValidator;
 import io.github.railgun19457.astrbotadapter.protocol.ProtocolCodec;
 import io.github.railgun19457.astrbotadapter.protocol.Role;
+import io.github.railgun19457.astrbotadapter.protocol.Ops;
 import org.java_websocket.WebSocket;
 import org.java_websocket.handshake.ClientHandshake;
 import org.java_websocket.server.WebSocketServer;
@@ -15,7 +16,8 @@ import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.Map;
-import java.util.Optional;
+import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CompletionStage;
@@ -23,6 +25,20 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 
 public final class WebSocketServerEndpoint implements TransportEndpoint {
+    private static final Set<String> PRE_AUTH_OPS = Set.of(
+        Ops.PAIR_INIT,
+        Ops.PAIR_CHALLENGE,
+        Ops.PAIR_PROVE,
+        Ops.PAIR_COMPLETE,
+        Ops.AUTH_HELLO,
+        Ops.AUTH_CHALLENGE,
+        Ops.AUTH_PROVE_CLIENT,
+        Ops.AUTH_RESULT,
+        Ops.CORE_PING,
+        Ops.CORE_PONG,
+        Ops.CORE_GOODBYE
+    );
+
     private final String host;
     private final int port;
     private final String path;
@@ -131,13 +147,17 @@ public final class WebSocketServerEndpoint implements TransportEndpoint {
                 conn.close(1008, "invalid path");
                 return;
             }
-            sessions.put(conn, new SessionInfo(SessionState.AUTHENTICATING, null, null, 0L, 0L));
-            logger.info("WebSocket connected from " + conn.getRemoteSocketAddress());
+            String connectionId = UUID.randomUUID().toString().replace("-", "");
+            sessions.put(conn, new SessionInfo(connectionId, SessionState.AUTHENTICATING, null, null, 0L, 0L));
+            logger.info("WebSocket connected from " + conn.getRemoteSocketAddress() + " connection=" + connectionId);
         }
 
         @Override
         public void onClose(WebSocket conn, int code, String reason, boolean remote) {
-            sessions.remove(conn);
+            SessionInfo removed = sessions.remove(conn);
+            if (removed != null) {
+                responder.onConnectionClosed(removed.connectionId());
+            }
             logger.info("WebSocket closed: " + reason + " (" + code + ")");
         }
 
@@ -159,13 +179,17 @@ public final class WebSocketServerEndpoint implements TransportEndpoint {
                 conn.close(1008, String.join(", ", validation.errors()));
                 return;
             }
-            SessionInfo sessionInfo = sessions.getOrDefault(conn, new SessionInfo(SessionState.AUTHENTICATING, null, null, 0L, 0L));
+            SessionInfo sessionInfo = sessions.get(conn);
+            if (sessionInfo == null) {
+                conn.close(1008, "unknown connection");
+                return;
+            }
             if (frame.seq() <= sessionInfo.lastSeq()) {
                 conn.close(1008, "sequence regression");
                 return;
             }
             sessions.put(conn, sessionInfo.withLastSeq(frame.seq()));
-            if (sessionInfo.state() != SessionState.READY && !isAuthFrame(frame.type())) {
+            if (sessionInfo.state() != SessionState.READY && !isAllowedPreAuthFrame(frame)) {
                 conn.close(1008, "authentication required");
                 return;
             }
@@ -176,7 +200,8 @@ public final class WebSocketServerEndpoint implements TransportEndpoint {
             if (frame.type() == FrameType.RESPONSE || frame.type() == FrameType.ERROR) {
                 requestManager.resolveResponse(frame);
             }
-            responder.onFrame(frame).whenComplete((response, throwable) -> {
+            String connectionId = sessionInfo.connectionId();
+            responder.onFrame(connectionId, frame).whenComplete((response, throwable) -> {
                 if (throwable != null) {
                     logger.error("Failed to handle frame " + frame.id(), throwable);
                     return;
@@ -184,7 +209,8 @@ public final class WebSocketServerEndpoint implements TransportEndpoint {
                 if (response != null && conn.isOpen()) {
                     Frame<?> sequenced = nextOutgoing(conn, response);
                     conn.send(codec.encode(sequenced));
-                    if (frame.type() == FrameType.AUTH && response.type() == FrameType.AUTH_RESULT && response.status() != null && response.status().ok()) {
+                    if (frame.type() == FrameType.AUTH && response.type() == FrameType.AUTH_RESULT && response.status() != null && response.status().ok()
+                        && (Ops.AUTH_PROVE_CLIENT.equals(frame.op()) || (Ops.PAIR_PROVE.equals(frame.op()) && Ops.PAIR_COMPLETE.equals(response.op())))) {
                         if (hasDuplicateReadySession(conn, frame.route().src().role().wireName(), frame.route().src().id())) {
                             conn.close(1008, "duplicate authenticated identity");
                             return;
@@ -228,7 +254,10 @@ public final class WebSocketServerEndpoint implements TransportEndpoint {
         }
 
         private Frame<?> nextOutgoing(WebSocket conn, Frame<?> frame) {
-            SessionInfo session = sessions.getOrDefault(conn, new SessionInfo(SessionState.AUTHENTICATING, null, null, 0L, 0L));
+            SessionInfo session = sessions.get(conn);
+            if (session == null) {
+                return withSeq(frame, 1L);
+            }
             long seq = session.lastOutgoingSeq() + 1;
             sessions.put(conn, session.withLastOutgoingSeq(seq));
             return withSeq(frame, seq);
@@ -251,8 +280,14 @@ public final class WebSocketServerEndpoint implements TransportEndpoint {
             );
         }
 
-        private boolean isAuthFrame(FrameType type) {
-            return type == FrameType.HELLO || type == FrameType.CHALLENGE || type == FrameType.AUTH || type == FrameType.AUTH_RESULT || type == FrameType.ERROR;
+        private boolean isAllowedPreAuthFrame(Frame<?> frame) {
+            if (frame.type() == FrameType.ERROR) {
+                return true;
+            }
+            if (frame.op() == null || frame.op().isBlank()) {
+                return false;
+            }
+            return PRE_AUTH_OPS.contains(frame.op());
         }
 
         private boolean matchesAuthenticatedIdentity(SessionInfo sessionInfo, Frame<?> frame) {
@@ -272,17 +307,17 @@ public final class WebSocketServerEndpoint implements TransportEndpoint {
             setConnectionLostTimeout(60);
         }
 
-        private record SessionInfo(SessionState state, String role, String id, long lastSeq, long lastOutgoingSeq) {
+        private record SessionInfo(String connectionId, SessionState state, String role, String id, long lastSeq, long lastOutgoingSeq) {
             private SessionInfo withLastSeq(long seq) {
-                return new SessionInfo(state, role, id, seq, lastOutgoingSeq);
+                return new SessionInfo(connectionId, state, role, id, seq, lastOutgoingSeq);
             }
 
             private SessionInfo withLastOutgoingSeq(long seq) {
-                return new SessionInfo(state, role, id, lastSeq, seq);
+                return new SessionInfo(connectionId, state, role, id, lastSeq, seq);
             }
 
             private SessionInfo authenticated(String role, String id) {
-                return new SessionInfo(SessionState.READY, role, id, lastSeq, lastOutgoingSeq);
+                return new SessionInfo(connectionId, SessionState.READY, role, id, lastSeq, lastOutgoingSeq);
             }
         }
     }

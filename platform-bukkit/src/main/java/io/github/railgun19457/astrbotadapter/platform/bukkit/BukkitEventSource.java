@@ -11,14 +11,22 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.event.player.PlayerQuitEvent;
 import org.bukkit.plugin.Plugin;
 
+import java.util.function.Supplier;
+
 public final class BukkitEventSource implements PlatformEventSource {
     private final Plugin plugin;
+    private final Supplier<BukkitChatService> chatServiceSupplier;
     private final Listener listener = new Listener() {
         @EventHandler
         public void onChat(AsyncPlayerChatEvent event) {
-            if (chatListener != null) {
-                chatListener.onChat(new PlatformChatEvent(event.getPlayer().getUniqueId(), event.getPlayer().getName(), event.getMessage(), event.getPlayer().getWorld().getName()));
+            if (chatListener == null) {
+                return;
             }
+            BukkitChatService chatService = chatServiceSupplier == null ? null : chatServiceSupplier.get();
+            if (chatService != null && chatService.shouldSuppressEcho(event.getMessage())) {
+                return;
+            }
+            chatListener.onChat(new PlatformChatEvent(event.getPlayer().getUniqueId(), event.getPlayer().getName(), event.getMessage(), event.getPlayer().getWorld().getName()));
         }
 
         @EventHandler
@@ -41,7 +49,12 @@ public final class BukkitEventSource implements PlatformEventSource {
     private boolean registered;
 
     public BukkitEventSource(Plugin plugin) {
+        this(plugin, () -> null);
+    }
+
+    public BukkitEventSource(Plugin plugin, Supplier<BukkitChatService> chatServiceSupplier) {
         this.plugin = plugin;
+        this.chatServiceSupplier = chatServiceSupplier == null ? () -> null : chatServiceSupplier;
     }
 
     @Override
