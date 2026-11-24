@@ -1,0 +1,17 @@
+{
+  "schemaVersion": 1,
+  "id": "astrbotadapter",
+  "version": "${version}",
+  "name": "AstrBotAdapter",
+  "description": "Connects a Fabric server to AstrBot",
+  "environment": "server",
+  "entrypoints": {
+    "server": ["io.github.railgun19457.astrbotadapter.fabric.FabricMod"]
+  },
+  "depends": {
+    "fabricloader": ">=0.19.3",
+    "fabric-api": ">=0.155.2",
+    "minecraft": "26.1.2",
+    "java": ">=25"
+  }
+}

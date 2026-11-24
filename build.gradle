@@ -1,0 +1,40 @@
+plugins { id 'java' }
+
+group = 'io.github.railgun19457'
+version = '3.0.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+}
+
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:1.20.4-R0.1-SNAPSHOT'
+    implementation 'com.google.code.gson:gson:2.11.0'
+    implementation 'org.java-websocket:Java-WebSocket:1.5.7'
+    testImplementation 'org.junit.jupiter:junit-jupiter:5.11.4'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher:1.11.4'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    options.encoding = 'UTF-8'
+}
+
+test { useJUnitPlatform() }
+
+processResources {
+    inputs.property('version', project.version)
+    filesMatching('plugin.yml') { expand(version: project.version) }
+}
+
+jar {
+    archiveBaseName = 'AstrBotAdapter-Paper'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from {
+        configurations.runtimeClasspath
+            .findAll { !it.name.startsWith('slf4j-api-') }
+            .collect { zipTree(it) }
+    }
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class'
+}

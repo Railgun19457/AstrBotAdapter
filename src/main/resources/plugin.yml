@@ -1,0 +1,16 @@
+name: AstrBotAdapter
+version: '${version}'
+main: io.github.railgun19457.astrbotadapter.paper.PaperPlugin
+api-version: '1.21'
+folia-supported: true
+description: Connects Minecraft to AstrBot
+commands:
+  astrbot:
+    description: AstrBot chat and connection management
+permissions:
+  astrbot.admin:
+    default: op
+  astrbot.ai:
+    default: true
+  astrbot.ai.public:
+    default: op

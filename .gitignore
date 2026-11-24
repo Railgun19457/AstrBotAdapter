@@ -2,3 +2,6 @@
 dev/
 target/
 /docs/
+.gradle/
+build/
+bin/

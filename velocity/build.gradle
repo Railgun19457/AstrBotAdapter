@@ -1,0 +1,38 @@
+plugins { id 'java' }
+
+version = rootProject.version
+
+repositories {
+    mavenCentral()
+    maven { url = 'https://repo.papermc.io/repository/maven-public/' }
+}
+
+dependencies {
+    compileOnly 'com.velocitypowered:velocity-api:3.3.0-SNAPSHOT'
+    compileOnly 'com.google.inject:guice:5.1.0'
+    implementation 'com.google.code.gson:gson:2.11.0'
+    implementation 'org.java-websocket:Java-WebSocket:1.5.7'
+}
+
+sourceSets.main.java {
+    srcDir rootProject.file('src/main/java')
+    exclude '**/paper/**'
+}
+tasks.withType(JavaCompile).configureEach {
+    options.release = 21
+    options.encoding = 'UTF-8'
+}
+processResources {
+    inputs.property('version', project.version)
+    filesMatching('velocity-plugin.json') { expand(version: project.version) }
+}
+jar {
+    archiveBaseName = 'AstrBotAdapter-Velocity'
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    from {
+        configurations.runtimeClasspath
+            .findAll { !it.name.startsWith('slf4j-api-') }
+            .collect { zipTree(it) }
+    }
+    exclude 'META-INF/*.SF', 'META-INF/*.RSA', 'META-INF/*.DSA', 'module-info.class'
+}

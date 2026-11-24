@@ -1,0 +1,7 @@
+{
+  "id": "astrbotadapter",
+  "name": "AstrBotAdapter",
+  "version": "${version}",
+  "description": "Connects a Velocity proxy to AstrBot",
+  "main": "io.github.railgun19457.astrbotadapter.velocity.VelocityPlugin"
+}

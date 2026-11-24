@@ -1,0 +1,27 @@
+node:
+  id: survival
+  name: Survival
+transport:
+  listen:
+    host: 127.0.0.1
+    port: 8765
+    astrbot_path: /astrbot
+features:
+  chat: true
+  ai: true
+  player_events: true
+  offline_players: true
+  log_query: false
+backend:
+  url: ""
+  proxy_id: ""
+  pairing_id: ""
+  pairing_code: ""
+  allow_config: false
+chat:
+  game_to_group_prefix: "*"
+  incoming_format: "[{platform}] {sender}: {message}"
+commands:
+  remote:
+    enabled: false
+    allow: [list]
